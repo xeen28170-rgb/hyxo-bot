@@ -1,0 +1,177 @@
+
+'use strict';
+
+require('dotenv').config();
+
+const { Client, GatewayIntentBits, Partials, Collection } = require('discord.js');
+
+const Logger = require('./src/utils/logger');
+const HandlerLoader = require('./src/handlers/handlerLoader');
+const AntiCrash = require('./src/utils/antiCrash');
+const CacheManager = require('./src/cache/cacheManager');
+const ModelRegistry = require('./src/utils/modelRegistry');
+const Owner = require('./src/models/Owner');
+const Guild = require('./src/models/Guild');
+
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildPresences,
+        GatewayIntentBits.GuildModeration,
+        GatewayIntentBits.GuildEmojisAndStickers,
+        GatewayIntentBits.GuildIntegrations,
+        GatewayIntentBits.GuildWebhooks,
+        GatewayIntentBits.GuildInvites,
+        GatewayIntentBits.GuildVoiceStates,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.GuildMessageReactions,
+        GatewayIntentBits.GuildMessageTyping,
+        GatewayIntentBits.DirectMessages,
+        GatewayIntentBits.DirectMessageReactions,
+        GatewayIntentBits.DirectMessageTyping,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildScheduledEvents,
+        GatewayIntentBits.AutoModerationConfiguration,
+        GatewayIntentBits.AutoModerationExecution,
+    ],
+    partials: [
+        Partials.Channel,
+        Partials.Message,
+        Partials.GuildMember,
+        Partials.Reaction,
+    ],
+    sweepers: {
+        messages: {
+            interval: 300,
+            lifetime: 1800,
+        },
+        users: {
+            interval: 600,
+            filter: user => !user.bot,
+        },
+    },
+    allowedMentions: {
+        parse: ['users', 'roles'],
+        repliedUser: false,
+    },
+    rest: {
+        timeout: 15000,
+        retries: 3,
+    },
+});
+
+client.commands = new Collection();
+client.aliases = new Collection();
+client.cooldowns = new Collection();
+client.events = new Collection();
+client.guildSettings = new Collection();
+client.antiRaidCache = new Collection();
+client.spamCache = new Collection();
+client.tempVoice = new Collection();
+client.giveaways = new Collection();
+client.tickets = new Collection();
+client.musicQueues = new Collection();
+client.locks = new Collection();
+client.boostLogCache = new Collection();
+
+client.botOwners = new Set(
+    (process.env.OWNER_IDS || '').split(',').map(id => id.trim()).filter(Boolean)
+);
+
+client.owners = new Set(client.botOwners);
+
+client.prefix = process.env.PREFIX || '+';
+client.defaultLanguage = process.env.DEFAULT_LANGUAGE || 'fr';
+client.version = require('./package.json').version;
+client.startTime = Date.now();
+client.cache = new CacheManager();
+
+function validateEnvironment() {
+    const missing = [];
+    if (!process.env.TOKEN?.trim()) missing.push('TOKEN');
+
+    const nodeMajor = Number(process.versions.node.split('.')[0]);
+    if (nodeMajor < 18) {
+        Logger.error(`[CONFIG] Node.js ${process.version} détecté. Le bot nécessite Node.js 18 ou plus.`);
+        return false;
+    }
+
+    if (missing.length) {
+        Logger.error(`[CONFIG] Variable(s) manquante(s): ${missing.join(', ')}`);
+        Logger.error('[CONFIG] Ajoute-les dans le fichier .env ou dans les variables Pterodactyl.');
+        return false;
+    }
+
+    return true;
+}
+
+async function initialize() {
+    // Ne pas effacer la console hors terminal interactif (ex: Pterodactyl/PM2),
+    // sinon on perd des logs de démarrage utiles.
+    if (process.stdout.isTTY) console.clear();
+    Logger.banner();
+
+    try {
+        if (!validateEnvironment()) {
+            process.exit(1);
+        }
+
+        Logger.info('Initialisation du cache...');
+        await client.cache.init();
+        const [persistedOwners, storedGuilds] = await Promise.all([
+            Owner.find(),
+            Guild.find(),
+        ]);
+        const guildSettings = await Promise.all(
+            storedGuilds.map(settings => Guild.getOrCreate(settings.guildId))
+        );
+        for (const owner of persistedOwners) {
+            if (owner?.userId) client.owners.add(owner.userId);
+        }
+        for (const settings of guildSettings) {
+            if (settings?.guildId) client.cache.setGuild(settings.guildId, settings);
+        }
+        Logger.success(`Cache initialisé (${guildSettings.length} serveur(s) préchargé(s))`);
+
+        Logger.info('Chargement des handlers...');
+        const loader = new HandlerLoader(client);
+        await loader.loadAll();
+        Logger.success('Handlers chargés');
+
+        Logger.info('Connexion à Discord...');
+        await client.login(process.env.TOKEN);
+
+    } catch (error) {
+        Logger.error('Erreur fatale lors de l\'initialisation:', error);
+        process.exit(1);
+    }
+}
+
+AntiCrash.init(client);
+
+// Graceful shutdown: flush all pending JSON saves BEFORE destroying the client.
+// Handler unique (antiCrash n'enregistre plus SIGINT/SIGTERM) pour garantir que
+// les sauvegardes en attente sont écrites de façon synchrone et atomique avant
+// de quitter — sinon les dernières modifications (debounce 500ms) seraient perdues.
+let shuttingDown = false;
+function gracefulShutdown(signal) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    Logger.info(`[SHUTDOWN] Signal ${signal} reçu. Sauvegarde des données en attente...`);
+    try {
+        ModelRegistry.flushAll();
+    } catch (error) {
+        Logger.error('[SHUTDOWN] Erreur lors du flush final:', error);
+    }
+    try {
+        if (client?.destroy) client.destroy();
+    } catch { /* le client n'est peut-être pas encore connecté */ }
+    process.exit(0);
+}
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
+initialize();
+
+module.exports = client;

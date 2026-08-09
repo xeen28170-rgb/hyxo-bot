@@ -1,0 +1,187 @@
+{
+  "general": {
+    "no_permission": "❌ Vous n'avez pas la permission d'utiliser cette commande.",
+    "bot_no_permission": "❌ Je n'ai pas les permissions nécessaires pour effectuer cette action.",
+    "invalid_user": "❌ Utilisateur introuvable. Mentionnez un utilisateur ou fournissez son ID.",
+    "invalid_channel": "❌ Salon introuvable.",
+    "invalid_role": "❌ Rôle introuvable.",
+    "invalid_duration": "❌ Durée invalide. Exemples: `10m`, `1h`, `7d`.",
+    "invalid_number": "❌ Nombre invalide.",
+    "error": "❌ Une erreur est survenue. Réessayez plus tard.",
+    "cooldown": "⏳ Veuillez attendre **{time}** avant de réutiliser cette commande.",
+    "owner_only": "❌ Cette commande est réservée aux propriétaires du bot.",
+    "guild_only": "❌ Cette commande ne peut être utilisée qu'en serveur.",
+    "success": "✅ Succès",
+    "loading": "⏳ Chargement...",
+    "cancelled": "🚫 Action annulée.",
+    "no_reason": "Aucune raison fournie",
+    "dm_error": "❌ Impossible d'envoyer un message privé à cet utilisateur.",
+    "higher_role": "❌ Cet utilisateur a un rôle supérieur ou égal au vôtre.",
+    "bot_higher_role": "❌ Mon rôle est inférieur à celui de cet utilisateur.",
+    "cannot_target_owner": "❌ Vous ne pouvez pas effectuer cette action sur le propriétaire du serveur.",
+    "cannot_target_bot": "❌ Vous ne pouvez pas effectuer cette action sur moi."
+  },
+  "moderation": {
+    "warn": {
+      "success": "⚠️ **{user}** a reçu un avertissement. (Avertissement #{count})\n**Raison:** {reason}",
+      "dm": "⚠️ Vous avez reçu un avertissement sur **{guild}**.\n**Raison:** {reason}\n**Modérateur:** {moderator}",
+      "no_warns": "✅ Cet utilisateur n'a aucun avertissement.",
+      "cleared": "✅ Tous les avertissements de **{user}** ont été supprimés.",
+      "list_title": "⚠️ Avertissements de {user}"
+    },
+    "mute": {
+      "success": "🔇 **{user}** a été mis en sourdine.\n**Raison:** {reason}",
+      "temp_success": "🔇 **{user}** a été mis en sourdine pour **{duration}**.\n**Raison:** {reason}",
+      "already_muted": "❌ Cet utilisateur est déjà en sourdine.",
+      "no_mute_role": "❌ Aucun rôle de mute configuré. Utilisez `+config muterole <rôle>`.",
+      "unmute_success": "🔊 **{user}** n'est plus en sourdine.\n**Raison:** {reason}",
+      "not_muted": "❌ Cet utilisateur n'est pas en sourdine.",
+      "expired": "🔊 La mise en sourdine de **{user}** a expiré."
+    },
+    "cmute": {
+      "success": "🔇 **{user}** a été mis en sourdine vocal dans **{channel}**.\n**Raison:** {reason}",
+      "uncmute_success": "🔊 **{user}** n'est plus en sourdine vocal.\n**Raison:** {reason}"
+    },
+    "kick": {
+      "success": "👢 **{user}** a été expulsé du serveur.\n**Raison:** {reason}",
+      "dm": "👢 Vous avez été expulsé de **{guild}**.\n**Raison:** {reason}\n**Modérateur:** {moderator}"
+    },
+    "ban": {
+      "success": "🔨 **{user}** a été banni du serveur.\n**Raison:** {reason}",
+      "temp_success": "🔨 **{user}** a été banni pour **{duration}**.\n**Raison:** {reason}",
+      "already_banned": "❌ Cet utilisateur est déjà banni.",
+      "unban_success": "✅ **{user}** a été débanni.\n**Raison:** {reason}",
+      "not_banned": "❌ Cet utilisateur n'est pas banni.",
+      "dm": "🔨 Vous avez été banni de **{guild}**.\n**Raison:** {reason}\n**Modérateur:** {moderator}",
+      "expired": "✅ Le ban temporaire de **{user}** a expiré."
+    },
+    "clear": {
+      "success": "🗑️ **{count}** message(s) supprimé(s).",
+      "invalid_amount": "❌ Entrez un nombre entre 1 et 100.",
+      "nothing_deleted": "❌ Aucun message n'a pu être supprimé."
+    },
+    "derank": {
+      "success": "📉 Tous les rôles de **{user}** ont été retirés.\n**Raison:** {reason}",
+      "no_roles": "❌ Cet utilisateur n'a aucun rôle à retirer."
+    },
+    "addrole": {
+      "success": "✅ Le rôle **{role}** a été ajouté à **{user}**.",
+      "already_has": "❌ Cet utilisateur possède déjà ce rôle.",
+      "managed": "❌ Ce rôle est géré par une intégration."
+    },
+    "delrole": {
+      "success": "✅ Le rôle **{role}** a été retiré à **{user}**.",
+      "not_has": "❌ Cet utilisateur ne possède pas ce rôle."
+    },
+    "lock": {
+      "success": "🔒 Le salon **{channel}** a été verrouillé.\n**Raison:** {reason}",
+      "already_locked": "❌ Ce salon est déjà verrouillé.",
+      "unlock_success": "🔓 Le salon **{channel}** a été déverrouillé.\n**Raison:** {reason}"
+    },
+    "hide": {
+      "success": "🙈 Le salon **{channel}** a été masqué.\n**Raison:** {reason}",
+      "unhide_success": "👁️ Le salon **{channel}** est maintenant visible.\n**Raison:** {reason}"
+    }
+  },
+  "antiraid": {
+    "enabled": "✅ Le système antiraid a été activé.",
+    "disabled": "❌ Le système antiraid a été désactivé.",
+    "module_enabled": "✅ Le module **{module}** a été activé.",
+    "module_disabled": "❌ Le module **{module}** a été désactivé.",
+    "whitelist_added": "✅ **{user}** a été ajouté à la whitelist antiraid.",
+    "whitelist_removed": "✅ **{user}** a été retiré de la whitelist antiraid.",
+    "already_whitelisted": "❌ **{user}** est déjà dans la whitelist.",
+    "not_whitelisted": "❌ **{user}** n'est pas dans la whitelist.",
+    "punishment_set": "✅ La punition a été définie sur **{punishment}**.",
+    "threshold_set": "✅ Le seuil **{type}** a été défini sur **{value}**.",
+    "triggered": "🚨 Antiraid déclenché! **{executor}** a effectué **{action}** ({count} fois).",
+    "punished": "⚡ **{executor}** a été punis: **{punishment}**",
+    "rollback": "↩️ Rollback effectué: {details}"
+  },
+  "tickets": {
+    "created": "🎫 Votre ticket a été créé: {channel}",
+    "already_open": "❌ Vous avez déjà un ticket ouvert: {channel}",
+    "closed": "🎫 Ticket fermé par **{user}**.\n**Raison:** {reason}",
+    "claimed": "✅ Ticket pris en charge par **{user}**.",
+    "renamed": "✅ Ticket renommé en **{name}**.",
+    "added": "✅ **{user}** a été ajouté au ticket.",
+    "removed": "✅ **{user}** a été retiré du ticket.",
+    "not_ticket": "❌ Cette commande ne peut être utilisée que dans un ticket.",
+    "no_permission": "❌ Vous n'avez pas la permission de gérer ce ticket.",
+    "transcript_saved": "📄 Transcription sauvegardée.",
+    "max_tickets": "❌ Vous avez atteint le nombre maximum de tickets ouverts ({max})."
+  },
+  "tempvoc": {
+    "not_in_channel": "❌ Vous devez être dans votre salon vocal temporaire.",
+    "not_owner": "❌ Vous n'êtes pas le propriétaire de ce salon.",
+    "renamed": "✅ Votre salon a été renommé en **{name}**.",
+    "locked": "🔒 Votre salon a été verrouillé.",
+    "unlocked": "🔓 Votre salon a été déverrouillé.",
+    "limit_set": "✅ La limite a été définie à **{limit}** utilisateurs.",
+    "hidden": "🙈 Votre salon a été masqué.",
+    "shown": "👁️ Votre salon est maintenant visible.",
+    "permitted": "✅ **{user}** peut maintenant rejoindre votre salon.",
+    "denied": "❌ **{user}** ne peut plus rejoindre votre salon.",
+    "deleted": "🗑️ Votre salon vocal temporaire a été supprimé.",
+    "transferred": "✅ La propriété a été transférée à **{user}**."
+  },
+  "giveaway": {
+    "created": "🎉 Giveaway créé avec succès!",
+    "ended": "🎉 Le giveaway pour **{prize}** est terminé!\n**Gagnants:** {winners}",
+    "no_winners": "😢 Aucun participant éligible pour le giveaway.",
+    "rerolled": "🎉 Nouveau(x) gagnant(s) pour **{prize}**: {winners}",
+    "not_found": "❌ Giveaway introuvable.",
+    "already_ended": "❌ Ce giveaway est déjà terminé.",
+    "deleted": "🗑️ Giveaway supprimé.",
+    "entered": "🎉 Vous avez participé au giveaway!",
+    "left": "😢 Vous avez quitté le giveaway.",
+    "not_eligible": "❌ Vous n'êtes pas éligible pour ce giveaway.",
+    "blacklisted": "❌ Vous êtes sur la liste noire de ce giveaway."
+  },
+  "backup": {
+    "created": "✅ Backup créé avec succès! ID: `{id}`",
+    "restored": "✅ Backup `{id}` restauré avec succès!",
+    "deleted": "🗑️ Backup `{id}` supprimé.",
+    "not_found": "❌ Backup introuvable.",
+    "list_empty": "❌ Aucun backup disponible.",
+    "loading": "⏳ Restauration en cours... Cela peut prendre quelques minutes.",
+    "confirm": "⚠️ Êtes-vous sûr de vouloir restaurer ce backup? Cela modifiera le serveur.\nRépondez `confirmer` pour continuer.",
+    "timeout": "⏰ Confirmation expirée. Action annulée."
+  },
+  "config": {
+    "updated": "✅ Configuration mise à jour: **{key}** → **{value}**",
+    "prefix_set": "✅ Le préfixe a été changé en `{prefix}`",
+    "language_set": "✅ La langue a été changée en **{language}**",
+    "view_title": "⚙️ Configuration de {guild}",
+    "invalid_option": "❌ Option invalide."
+  },
+  "reminder": {
+    "set": "⏰ Rappel défini pour **{time}**.",
+    "fired": "⏰ **Rappel:** {message}",
+    "list_empty": "❌ Vous n'avez aucun rappel actif.",
+    "deleted": "✅ Rappel supprimé.",
+    "not_found": "❌ Rappel introuvable."
+  },
+  "help": {
+    "title": "📚 Aide — Gestions Bot",
+    "description": "Utilisez les boutons ou le menu pour naviguer entre les catégories.",
+    "footer": "Préfixe: {prefix} | {commands} commandes disponibles",
+    "no_command": "❌ Commande introuvable.",
+    "command_info": "📋 Informations sur la commande"
+  },
+  "automod": {
+    "spam_detected": "🚫 **{user}**, arrêtez le spam!",
+    "link_detected": "🚫 **{user}**, les liens ne sont pas autorisés ici!",
+    "mention_detected": "🚫 **{user}**, trop de mentions!",
+    "badword_detected": "🚫 **{user}**, langage inapproprié détecté!",
+    "strike": "⚠️ **{user}** a reçu un strike automod ({count}/{max}). Punition: **{punishment}**"
+  },
+  "utility": {
+    "userinfo_title": "👤 Informations — {user}",
+    "serverinfo_title": "🏠 Informations — {guild}",
+    "avatar_title": "🖼️ Avatar de {user}",
+    "ping_title": "🏓 Pong!",
+    "uptime_title": "⏱️ Uptime",
+    "stats_title": "📊 Statistiques du Bot"
+  }
+}

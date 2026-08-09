@@ -1,0 +1,45 @@
+'use strict';
+
+const BackupService = require('../../services/backupService');
+const Backup = require('../../models/Backup');
+const EmbedHelper = require('../../utils/embedBuilder');
+const Helpers = require('../../utils/helpers');
+
+module.exports = {
+    name: 'backup',
+    category: 'backup',
+    ownerOnly: false,
+    description: 'Gérer les backups du serveur.',
+    usage: '+backup <create|restore|list|delete> [id]',
+    permissions: ['Administrator'],
+    cooldown: 10,
+    async run(client, message, args) {
+        const sub = args[0]?.toLowerCase();
+
+        if (sub === 'create') {
+            const backup = await BackupService.create(message.guild, message.author.id);
+            return message.channel.send({ embeds: [EmbedHelper.success(`Sauvegarde créée avec l'ID : \`${backup.backupId}\``)] });
+        }
+
+        if (sub === 'restore') {
+            const id = args[1];
+            if (!id) return message.channel.send({ embeds: [EmbedHelper.error('ID manquant.')] });
+
+            const backup = await Backup.findOne({ backupId: id, guildId: message.guild.id });
+            if (!backup) return message.channel.send({ embeds: [EmbedHelper.error('Sauvegarde introuvable.')] });
+
+            await message.channel.send({ embeds: [EmbedHelper.info('📥 Restauration...', 'Restauration en cours, merci de patienter.')] });
+            await BackupService.restore(message.guild, id);
+            return message.channel.send({ embeds: [EmbedHelper.success('Le serveur a été restauré avec succès.')] });
+        }
+
+        if (sub === 'list') {
+            const backups = await Backup.find({ guildId: message.guild.id });
+            const embed = EmbedHelper.info('📥 Backups du serveur', backups.map(b => `\`${b.backupId}\` - ${Helpers.formatDate(b.createdAt)}`).join('\n') || 'Aucune sauvegarde.');
+            return message.channel.send({ embeds: [embed] });
+        }
+
+        return message.channel.send({ embeds: [EmbedHelper.info('📥 Backups — Aide', '`+backup create`\n`+backup restore <id>`\n`+backup list`')] });
+    },
+};
+
