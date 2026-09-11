@@ -57,12 +57,41 @@ const GiveawayService = {
     },
 
     /**
+     * Sélectionne les gagnants parmi les participants en appliquant la blacklist et
+     * l'éventuel rôle requis (requirements.role).
+     */
+    async pickWinners(client, giveaway, participants, guild) {
+        if (!Array.isArray(participants) || participants.length === 0) return [];
+        const blacklist = Array.isArray(giveaway.blacklist) ? giveaway.blacklist : [];
+        const requiredRole = giveaway.requirements?.role || null;
+
+        let eligible = participants.filter(p => !blacklist.includes(p));
+
+        if (requiredRole && guild) {
+            const resolved = [];
+            for (const userId of eligible) {
+                const member = await guild.members.fetch(userId).catch(() => null);
+                if (member && member.roles.cache.has(requiredRole)) resolved.push(userId);
+            }
+            eligible = resolved;
+        }
+
+        return eligible.sort(() => Math.random() - 0.5).slice(0, giveaway.winners || 1);
+    },
+
+    /**
      * Terminer un giveaway
      */
     async end(client, giveaway) {
         if (giveaway.ended) return;
 
-        await Giveaway.updateOne({ _id: giveaway._id }, { ended: true, active: false });
+        // Verrou atomique : seule une exécution marque réellement le giveaway comme terminé,
+        // ce qui évite le double tirage de gagnants en cas d'appels concurrents.
+        const marked = await Giveaway.updateOne(
+            { _id: giveaway._id, ended: false },
+            { ended: true, active: false }
+        );
+        if (marked.modifiedCount === 0) return;
 
         const channel = client.channels.cache.get(giveaway.channelId)
             || await client.channels.fetch(giveaway.channelId).catch(() => null);
@@ -77,10 +106,10 @@ const GiveawayService = {
         const users = await reaction.users.fetch();
         const participants = users.filter(u => !u.bot).map(u => u.id);
 
-        const eligible = participants.filter(p => !giveaway.blacklist.includes(p));
-        const winners = eligible.sort(() => Math.random() - 0.5).slice(0, giveaway.winners);
+        const guild = client.guilds.cache.get(giveaway.guildId);
+        const winners = await this.pickWinners(client, giveaway, participants, guild);
 
-        await Giveaway.updateOne({ _id: giveaway._id }, { winnerIds: winners, participants });
+        await Giveaway.updateOne({ _id: giveaway._id }, { winnerIds: winners, participants, endedAt: new Date() });
 
         const embed = new EmbedBuilder()
             .setColor(winners.length ? 0x2B2D31 : 0xFF4444)
@@ -94,7 +123,6 @@ const GiveawayService = {
 
         await msg.edit({ embeds: [embed] }).catch(() => {});
 
-        const guild = client.guilds.cache.get(giveaway.guildId);
         if (guild) {
             const logEmbed = new EmbedBuilder()
                 .setColor(winners.length ? 0x57F287 : 0xED4245)
@@ -151,8 +179,8 @@ const GiveawayService = {
         const users = await reaction.users.fetch();
         const participants = users.filter(u => !u.bot).map(u => u.id);
 
-        const eligible = participants.filter(p => !giveaway.blacklist.includes(p));
-        const winners = eligible.sort(() => Math.random() - 0.5).slice(0, giveaway.winners);
+        const guild = client.guilds.cache.get(giveaway.guildId);
+        const winners = await this.pickWinners(client, giveaway, participants, guild);
 
         if (winners.length) {
             const settings = await getGuildSettings(client, giveaway.guildId, { create: false });
@@ -165,7 +193,6 @@ const GiveawayService = {
             await channel.send({ content: `**Reroll:** ${winMsg}` }).catch(() => {});
         }
 
-        const guild = client.guilds.cache.get(giveaway.guildId);
         if (guild) {
             const logEmbed = new EmbedBuilder()
                 .setColor(0xF1C40F)

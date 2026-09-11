@@ -27,8 +27,8 @@ module.exports = {
                 '**TTL strikes:** 24h (réinitialisés automatiquement)',
                 '',
                 '**Usage:**',
-                '`+strikes set warn <n>` / `mute` / `kick` / `ban`',
-                '`+strikes reset` — valeurs par défaut',
+                '`-strikes set warn <n>` / `mute` / `kick` / `ban`',
+                '`-strikes reset` — valeurs par défaut',
             ].join('\n'), { color: 0xFF0000 })] });
         }
 
@@ -59,7 +59,7 @@ module.exports = {
 
         if (sub === 'ancien') {
             const dureeStr = args[1];
-            if (!dureeStr) return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+strikes ancien <durée>` (ex: 7j, 30j)')] });
+            if (!dureeStr) return message.channel.send({ embeds: [EmbedHelper.error('Usage: `-strikes ancien <durée>` (ex: 7j, 30j)')] });
             const dureeMs = Helpers.parseDuration(dureeStr);
             if (!dureeMs) return message.channel.send({ embeds: [EmbedHelper.error('Durée invalide. Exemple: `7j`, `30j`')] });
 
@@ -68,6 +68,6 @@ module.exports = {
             return message.channel.send({ embeds: [EmbedHelper.success(`Un membre sera considéré comme **ancien** après **${dureeStr}** sur le serveur.`)] });
         }
 
-        return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+strikes [info|set <type> <n>|reset|ancien <durée>]`')] });
+        return message.channel.send({ embeds: [EmbedHelper.error('Usage: `-strikes [info|set <type> <n>|reset|ancien <durée>]`')] });
     },
 };

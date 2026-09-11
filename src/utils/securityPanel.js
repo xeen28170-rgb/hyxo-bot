@@ -193,6 +193,7 @@ function buildEmbed(guild, settings, state) {
             { name: '📊 Configurés', value: `${configuredLogs(settings)}/${ALL_LOG_ENTRIES.length}`, inline: true },
             { name: '🛡️ Sécurité', value: settings.logs?.securityLogs ? `<#${settings.logs.securityLogs}>` : '❌ Non configuré', inline: true },
             { name: '🚨 Raid', value: settings.logs?.raidLogs ? `<#${settings.logs.raidLogs}>` : '❌ Non configuré', inline: true },
+            { name: '🚧 Prison', value: settings.logs?.prisonLogs ? `<#${settings.logs.prisonLogs}>` : '❌ Non configuré', inline: true },
         );
     }
 
@@ -221,46 +222,29 @@ function applyModuleStates(settings, updates, modules, value) {
     updates['antiraid.enabled'] = willHaveActiveModule;
 }
 
-function buildRows(state, settings) {
+function buildRows(state) {
     const rows = [buildPageSelect(state.page)];
 
     if (state.page === 'protections') {
         const selected = getSelectedModules(state);
         const hasThreshold = selected.some(m => m.thresholdPath);
-        const hasPunishment = selected.some(m => m.punishmentPath);
 
         rows.push(buildModuleSelect(state));
         rows.push(buildLevelSelect());
         rows.push(new ActionRowBuilder().addComponents(
             buildPunishmentSelect(state).components[0],
+        ));
+        rows.push(new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId('secur_threshold_down')
-                .setLabel('Seuil −')
+                .setLabel('−')
                 .setStyle(ButtonStyle.Secondary)
                 .setDisabled(!hasThreshold),
             new ButtonBuilder()
                 .setCustomId('secur_threshold_up')
-                .setLabel('Seuil +')
+                .setLabel('+')
                 .setStyle(ButtonStyle.Secondary)
                 .setDisabled(!hasThreshold),
-        ));
-        rows.push(new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId('secur_all_off')
-                .setLabel('Tout OFF')
-                .setStyle(ButtonStyle.Danger),
-            new ButtonBuilder()
-                .setCustomId('secur_all_on')
-                .setLabel('Tout ON')
-                .setStyle(ButtonStyle.Success),
-            new ButtonBuilder()
-                .setCustomId('secur_all_max')
-                .setLabel('Tout MAX')
-                .setStyle(ButtonStyle.Danger),
-            new ButtonBuilder()
-                .setCustomId('secur_refresh')
-                .setLabel('↻')
-                .setStyle(ButtonStyle.Primary),
         ));
     } else if (state.page === 'whitelist' || state.page === 'owners') {
         const isOwners = state.page === 'owners';
@@ -283,12 +267,12 @@ function buildRows(state, settings) {
         ));
     } else if (state.page === 'logs') {
         rows.push(new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('secur_logs_setup').setLabel('Créer tous les logs').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId('secur_logs_setup').setLabel('Créer logs').setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId('secur_logs_here').setLabel('Sécurité ici').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId('secur_raid_logs_here').setLabel('Raid ici').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder()
                 .setCustomId('secur_logs_toggle')
-                .setLabel(settings?.logs?.enabled ? 'Désactiver logs' : 'Activer logs')
+                .setLabel('Logs')
                 .setStyle(ButtonStyle.Secondary),
         ));
     }
@@ -299,7 +283,7 @@ function buildRows(state, settings) {
 async function refresh(interaction, message, state, settings) {
     await interaction.update({
         embeds: [buildEmbed(message.guild, settings, state)],
-        components: buildRows(state, settings),
+        components: buildRows(state),
     });
 }
 
@@ -317,7 +301,7 @@ module.exports = {
 
         const panelMessage = await message.channel.send({
             embeds: [buildEmbed(message.guild, settings, state)],
-            components: buildRows(state, settings),
+            components: buildRows(state),
         });
 
         if (typeof panelMessage.createMessageComponentCollector !== 'function') return;
@@ -390,7 +374,7 @@ module.exports = {
                 }
                 await panelMessage.edit({
                     embeds: [buildEmbed(message.guild, settings, state)],
-                    components: buildRows(state, settings),
+                    components: buildRows(state),
                 }).catch(() => {});
                 return;
             } else if (customId === 'secur_logs_here') {

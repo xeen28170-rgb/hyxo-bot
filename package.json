@@ -8,8 +8,8 @@
     "dev": "nodemon index.js",
     "prod": "node --max-old-space-size=4096 index.js",
     "shard": "node shard.js",
-    "lint": "eslint src/**/*.js",
-    "test": "node src/utils/test.js"
+    "lint": "eslint \"src/**/*.js\"",
+    "test": "node --test tests/*.test.js"
   },
   "keywords": [
     "discord",

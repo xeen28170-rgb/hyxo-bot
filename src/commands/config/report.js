@@ -35,8 +35,8 @@ module.exports = {
             `**Salon:** ${channelId ? `<#${channelId}>` : 'Non configuré'}`,
             '',
             '**Usage:**',
-            '`+report set [#salon]` — Définir le salon de réception',
-            '`+report off` — Désactiver',
+            '`-report set [#salon]` — Définir le salon de réception',
+            '`-report off` — Désactiver',
         ].join('\n'), { color: 0xFF0000 });
 
         message.channel.send({ embeds: [embed] });

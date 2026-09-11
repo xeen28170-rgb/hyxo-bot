@@ -10,7 +10,7 @@ module.exports = {
     name: 'config',
     category: 'config',
     description: 'Configurer le bot pour ce serveur.',
-    usage: '+config <option> <valeur>',
+    usage: '-config <option> <valeur>',
     permissions: ['Administrator'],
     cooldown: 5,
     async run(client, message, args) {
@@ -20,7 +20,7 @@ module.exports = {
 
         switch (sub) {
             case 'prefix':
-                if (!args[1]) return message.channel.send({ embeds: [EmbedHelper.error('❌ Usage: `+config prefix <préfixe>`')] });
+                if (!args[1]) return message.channel.send({ embeds: [EmbedHelper.error('❌ Usage: `-config prefix <préfixe>`')] });
                 if (args[1].length > 5) return message.channel.send({ embeds: [EmbedHelper.error('❌ Le préfixe ne peut pas dépasser 5 caractères.')] });
                 await Guild.updateOne({ guildId: message.guild.id }, { prefix: args[1] });
                 client.cache.invalidateGuild(message.guild.id);
@@ -70,7 +70,7 @@ module.exports = {
 
             case 'reset':
                 await Guild.updateOne({ guildId: message.guild.id }, {
-                    prefix: '+', language: 'fr',
+                    prefix: '-', language: 'fr',
                     modRoles: [], adminRoles: [],
                 });
                 client.cache.invalidateGuild(message.guild.id);
@@ -90,7 +90,7 @@ async function sendConfigView(client, message) {
         .setThumbnail(message.guild.iconURL({ dynamic: true }))
         .addFields(
             { name: '⚙️ Général', value: [
-                `**Préfixe:** \`${settings?.prefix || '+'}\``,
+                `**Préfixe:** \`${settings?.prefix || '-'}\``,
                 `**Langue:** ${settings?.language?.toUpperCase() || 'FR'}`,
                 `**Rôle mute:** ${settings?.moderation?.muteRole ? `<@&${settings.moderation.muteRole}>` : 'Non configuré'}`,
             ].join('\n'), inline: false },
@@ -105,7 +105,7 @@ async function sendConfigView(client, message) {
             { name: '🎤 TempVoc', value: settings?.tempvoc?.enabled ? '✅ Activé' : '❌ Désactivé', inline: true },
         )
         .setTimestamp()
-        .setFooter({ text: '+config <option> <valeur> pour modifier' });
+        .setFooter({ text: '-config <option> <valeur> pour modifier' });
 
     message.channel.send({ embeds: [embed] });
 }
@@ -132,6 +132,6 @@ async function handleWelcomeConfig(client, message, args) {
             client.cache.invalidateGuild(message.guild.id);
             return message.channel.send({ embeds: [EmbedHelper.error('❌ Bienvenue désactivé.')] });
         default:
-            return message.channel.send({ embeds: [EmbedHelper.error('❌ Usage: `+config welcome <channel|message|off>`')] });
+            return message.channel.send({ embeds: [EmbedHelper.error('❌ Usage: `-config welcome <channel|message|off>`')] });
     }
 }

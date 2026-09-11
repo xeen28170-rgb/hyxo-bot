@@ -13,7 +13,7 @@ module.exports = {
     async run(client, message, args) {
         const sub = args[0]?.toLowerCase();
         if (!sub)
-            return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+antimassmention <on/off>` ou `+antimassmention <nombre>`')] });
+            return message.channel.send({ embeds: [EmbedHelper.error('Usage: `-antimassmention <on/off>` ou `-antimassmention <nombre>`')] });
 
         if (sub === 'on' || sub === 'off') {
             const enabled = sub === 'on';
@@ -40,8 +40,8 @@ module.exports = {
             `**Seuil:** ${current?.threshold || 5} mentions`,
             '',
             '**Commandes:**',
-            '`+antimassmention on/off` — activer/désactiver',
-            '`+antimassmention <nombre>` — seuil de mentions (2-50)',
+            '`-antimassmention on/off` — activer/désactiver',
+            '`-antimassmention <nombre>` — seuil de mentions (2-50)',
         ].join('\n'), { color: 0xFF0000 });
         message.channel.send({ embeds: [embed] });
     },

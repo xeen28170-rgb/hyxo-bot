@@ -26,11 +26,11 @@ module.exports = {
                 `🔨 **Ban:** ${strikes.ban} strikes`,
                 '',
                 '**Usage:**',
-                '`+punish set warn <nombre>` — seuil du warn',
-                '`+punish set mute <nombre>` — seuil du mute',
-                '`+punish set kick <nombre>` — seuil du kick',
-                '`+punish set ban <nombre>` — seuil du ban',
-                '`+punish reset` — rétablir les valeurs par défaut',
+                '`-punish set warn <nombre>` — seuil du warn',
+                '`-punish set mute <nombre>` — seuil du mute',
+                '`-punish set kick <nombre>` — seuil du kick',
+                '`-punish set ban <nombre>` — seuil du ban',
+                '`-punish reset` — rétablir les valeurs par défaut',
             ].join('\n'), { color: 0xFF0000 })] });
         }
 
@@ -60,6 +60,6 @@ module.exports = {
             return message.channel.send({ embeds: [EmbedHelper.success('Les seuils de sanctions ont été réinitialisés aux valeurs par défaut (warn:3, mute:5, kick:7, ban:10).')] });
         }
 
-        message.channel.send({ embeds: [EmbedHelper.error('Usage: `+punish [set <type> <nombre> | reset | info]`')] });
+        message.channel.send({ embeds: [EmbedHelper.error('Usage: `-punish [set <type> <nombre> | reset | info]`')] });
     },
 };

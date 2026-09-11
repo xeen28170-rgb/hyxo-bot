@@ -7,12 +7,14 @@ module.exports = {
     name: 'timeout',
     category: 'moderation_config',
     description: 'Active/désactive l\'utilisation du Timeout Discord au lieu du rôle mute (max 28 jours)',
-    usage: '+timeout <on/off>',
+    usage: '-timeout <on/off>',
     permissions: ['ManageGuild'],
     async run(client, message, args) {
         const status = args[0]?.toLowerCase();
-        if (!status || !['on', 'off'].includes(status))
-            return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+timeout <on/off>`')] });
+        if (!status || !['on', 'off'].includes(status)) {
+            const prefix = message.guildSettings?.prefix || client.prefix;
+            return message.channel.send({ embeds: [EmbedHelper.error(`Usage: \`${prefix}timeout <on/off>\``)] });
+        }
 
         const enabled = status === 'on';
         await Guild.updateOne({ guildId: message.guild.id }, { 'moderation.useTimeout': enabled });

@@ -11,16 +11,20 @@ module.exports = {
     name: 'ban',
     category: 'moderation',
     description: 'Bannir un utilisateur du serveur.',
-    usage: '+ban <utilisateur> [durée] [raison]',
+    usage: '-ban <utilisateur> [durée] [raison]',
     permissions: ['BanMembers'],
     botPermissions: ['BanMembers'],
     cooldown: 5,
     async run(client, message, args) {
         try {
-            if (!args[0]) return message.channel.send({ embeds: [EmbedHelper.error(`Usage : \`${module.exports.usage}\``)] });
+            if (!args[0]) {
+                const prefix = message.guildSettings?.prefix || client.prefix;
+                return message.channel.send({ embeds: [EmbedHelper.error(`Usage : \`${prefix}ban <utilisateur> [durée] [raison]\``)] });
+            }
 
             if (args[0].toLowerCase() === 'list') {
-                return message.channel.send({ embeds: [EmbedHelper.error('Utilise `+banlist` pour afficher les bannissements actifs.')] });
+                const prefix = message.guildSettings?.prefix || client.prefix;
+                return message.channel.send({ embeds: [EmbedHelper.error(`Utilise \`${prefix}banlist\` pour afficher les bannissements actifs.`)] });
             }
 
             const member = await Helpers.resolveMember(message.guild, args[0]);

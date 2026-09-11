@@ -13,7 +13,7 @@ module.exports = {
     async run(client, message, args) {
         const dureeStr = args[0];
         if (!dureeStr)
-            return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+ancien <durée>` (ex: 7j, 30j)')] });
+            return message.channel.send({ embeds: [EmbedHelper.error('Usage: `-ancien <durée>` (ex: 7j, 30j)')] });
 
         const dureeMs = Helpers.parseDuration(dureeStr);
         if (!dureeMs)

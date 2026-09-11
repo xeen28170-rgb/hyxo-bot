@@ -14,7 +14,7 @@ module.exports = {
         const days = parseInt(args[1]);
 
         if (!['serveur', 'server', 'emoji'].includes(type) || isNaN(days) || days < 1) {
-            return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+autobackup <serveur/emoji> <jours>`\nEx: `+autobackup serveur 7`')] });
+            return message.channel.send({ embeds: [EmbedHelper.error('Usage: `-autobackup <serveur/emoji> <jours>`\nEx: `-autobackup serveur 7`')] });
         }
 
         const key = type === 'emoji' ? 'autobackup.emojiInterval' : 'autobackup.serverInterval';

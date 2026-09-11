@@ -20,9 +20,10 @@ module.exports = {
             if (!targetMsg) return message.channel.send({ embeds: [EmbedHelper.error('Message introuvable avec cet ID.')] });
         }
 
+        const prefix = message.guildSettings?.prefix || client.prefix;
         const embed = EmbedHelper.info('📋 Formulaire', [
             'Cliquez sur le bouton ci-dessous pour remplir le formulaire.',
-            logChannel ? `\nLes réponses seront envoyées dans <#${logChannel.id}>.` : '\n⚠️ Aucun salon de log configuré (`+modmail` pour configurer).',
+            logChannel ? `\nLes réponses seront envoyées dans <#${logChannel.id}>.` : `\n⚠️ Aucun salon de log configuré (\`${prefix}modmail\` pour configurer).`,
         ].join(''), { color: 0xFF0000 });
 
         const row = new ActionRowBuilder().addComponents(

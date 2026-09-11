@@ -13,7 +13,8 @@ module.exports = {
         const action = (args[0] || '').toLowerCase();
         const valid = ['lockall', 'unlockall', 'hideall', 'unhideall'];
         if (!valid.includes(action)) {
-            return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+global-lock <lockall|unlockall|hideall|unhideall>`')] });
+            const prefix = message.guildSettings?.prefix || client.prefix;
+            return message.channel.send({ embeds: [EmbedHelper.error(`Usage: \`${prefix}global-lock <lockall|unlockall|hideall|unhideall>\``)] });
         }
 
         const channels = message.guild.channels.cache.filter(c => c.type === 0 || (action.includes('hide') && c.type === 2));

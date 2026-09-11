@@ -13,19 +13,21 @@ module.exports = {
 
         if (!status || !['on', 'off'].includes(status)) {
             const current = client.securInvite || { enabled: false };
+            const prefix = message.guildSettings?.prefix || client.prefix;
             return message.channel.send({ embeds: [EmbedHelper.info('🛡️ Sécurité Invite', [
                 `Statut: ${current.enabled ? '✅ Activé' : '❌ Désactivé'}`,
                 `Owners autorisés: ${current.whitelist?.length || 0} ID(s)`,
                 '',
-                '`+secur-invite on <owner_id>`',
-                '`+secur-invite off`',
+                `\`${prefix}secur-invite on <owner_id>\``,
+                `\`${prefix}secur-invite off\``,
             ].join('\n'))] });
         }
 
         if (status === 'on') {
             const ownerId = args[1];
             if (!ownerId) {
-                return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+secur-invite on <owner_id>`')] });
+                const prefix = message.guildSettings?.prefix || client.prefix;
+                return message.channel.send({ embeds: [EmbedHelper.error(`Usage: \`${prefix}secur-invite on <owner_id>\``)] });
             }
             client.securInvite = { enabled: true, whitelist: [ownerId] };
             return message.channel.send({ embeds: [EmbedHelper.success(`Sécurité invite activée. Owner: \`${ownerId}\`.`)] });

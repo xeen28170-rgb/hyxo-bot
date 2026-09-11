@@ -6,6 +6,7 @@ const AutomodService = require('../../services/automodService');
 const AntiraidService = require('../../services/antiraidService');
 const EmbedHelper = require('../../utils/embedBuilder');
 const { getGuildSettings } = require('../../utils/guildSettings');
+const { hasCustomCommandPermission } = require('../../utils/commandPermissions');
 
 module.exports = {
     name: 'messageCreate',
@@ -38,9 +39,12 @@ module.exports = {
         }
 
         const prefix = settings.prefix || client.prefix;
-        if (!content.startsWith(prefix)) return;
+        const usedPrefix = content.startsWith('=')
+            ? '='
+            : (content.startsWith(prefix) ? prefix : null);
+        if (!usedPrefix) return;
 
-        const args = content.slice(prefix.length).trim().split(/ +/);
+        const args = content.slice(usedPrefix.length).trim().split(/ +/);
         const commandName = args.shift().toLowerCase();
 
         let command = client.commands.get(commandName);
@@ -98,7 +102,7 @@ module.exports = {
                 const remaining = client.cache.checkCooldown(message.author.id, command.name);
                 if (remaining > 0) {
                     return message.channel.send({
-                        embeds: [EmbedHelper.error(`⏳ Attendez encore **${(remaining / 1000).toFixed(1)}s** avant de réutiliser \`${prefix}${command.name}\`.`)]
+                        embeds: [EmbedHelper.error(`⏳ Attendez encore **${(remaining / 1000).toFixed(1)}s** avant de réutiliser \`${usedPrefix}${command.name}\`.`)]
                     }).then(m => setTimeout(() => m.delete().catch(() => {}), 4000));
                 }
                 client.cache.setCooldown(message.author.id, command.name, command.cooldown * 1000);
@@ -146,30 +150,4 @@ function isCommandRestrictedInChannel(settings, channelId) {
     if (!moderation) return false;
     if (moderation.publicCommands === false) return true;
     return Array.isArray(moderation.restrictedChannels) && moderation.restrictedChannels.includes(channelId);
-}
-
-function hasCustomCommandPermission(settings, member, command) {
-    const targetIds = new Set([member.id, ...member.roles.cache.keys()]);
-    const permissions = settings?.permissions || {};
-    const keys = [
-        command.name,
-        ...(command.aliases || []),
-        ...(command.permissions || []),
-    ].map(key => String(key).toLowerCase());
-
-    if (keys.some(key => (permissions[key] || []).some(id => targetIds.has(id)))) return true;
-    if ((settings?.adminRoles || []).some(roleId => member.roles.cache.has(roleId))) return true;
-
-    const moderationPermissions = new Set([
-        'ManageMessages',
-        'KickMembers',
-        'BanMembers',
-        'ModerateMembers',
-        'MuteMembers',
-        'MoveMembers',
-    ]);
-    const isModerationCommand = command.category === 'moderation'
-        && (command.permissions || []).every(permission => moderationPermissions.has(permission));
-    return isModerationCommand
-        && (settings?.modRoles || []).some(roleId => member.roles.cache.has(roleId));
 }

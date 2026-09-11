@@ -22,6 +22,7 @@ const LOG_CATEGORIES = [
         categoryName: '📁 Logs Modération & Sécurité',
         entries: [
             { key: 'modLogs', label: 'Modération', channelName: 'logs-modération', aliases: ['mod', 'moderation', 'modération', 'modlog'] },
+            { key: 'prisonLogs', label: 'Prison', channelName: 'logs-prison', aliases: ['prison', 'jail', 'prisonlog'] },
             { key: 'securityLogs', label: 'Sécurité', channelName: 'logs-security', aliases: ['security', 'sécurité', 'secur'] },
             { key: 'raidLogs', label: 'Raid', channelName: 'logs-raid', aliases: ['raid', 'antiraid', 'raidlog'] },
             { key: 'warnLogs', label: 'Warns', channelName: 'logs-warns', aliases: ['warn', 'warns'] },

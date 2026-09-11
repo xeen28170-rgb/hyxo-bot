@@ -7,7 +7,7 @@ module.exports = {
     name: 'cleanup',
     category: 'moderation',
     description: 'Déconnecte tous les membres d\'un salon vocal.',
-    usage: '+cleanup <salon>',
+    usage: '-cleanup <salon>',
     permissions: ['MoveMembers'],
     botPermissions: ['MoveMembers'],
     async run(client, message, args) {

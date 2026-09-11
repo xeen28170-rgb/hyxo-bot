@@ -22,12 +22,13 @@ module.exports = {
             return message.channel.send({ embeds: [EmbedHelper.success(`Maximum de MPs par jour défini à **${value}**.`)] });
         }
 
+        const prefix = message.guildSettings?.prefix || client.prefix;
         message.channel.send({ embeds: [EmbedHelper.info('📧 Paramètres MP', [
             `Cooldown actuel: ${client.dmCooldown || 5}s`,
             `Max/jour: ${client.dmMaxPerDay || 50}`,
             '',
-            '`+mp-settings cooldown <secondes>`',
-            '`+mp-settings max <nombre>`',
+            `\`${prefix}mp-settings cooldown <secondes>\``,
+            `\`${prefix}mp-settings max <nombre>\``,
         ].join('\n'))] });
     },
 };

@@ -8,7 +8,7 @@ module.exports = {
     name: 'unmute',
     category: 'moderation',
     description: 'Retirer la sourdine d\'un membre.',
-    usage: '+unmute <utilisateur> [raison]',
+    usage: '-unmute <utilisateur>',
     permissions: ['ManageRoles'],
     botPermissions: ['ManageRoles'],
     cooldown: 5,
@@ -25,7 +25,7 @@ module.exports = {
             return message.channel.send({ embeds: [EmbedHelper.error(message.t('moderation.mute.not_muted'))] });
         }
 
-        const reason = args.slice(1).join(' ') || message.t('general.no_reason');
+        const reason = 'Aucune raison fournie';
 
         await member.roles.remove(muteRoleId, `${message.author.tag} | ${reason}`);
 

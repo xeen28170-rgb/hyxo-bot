@@ -13,7 +13,7 @@ module.exports = {
         const emojiArg = args[0];
         const role = Helpers.resolveRole(message.guild, args.slice(1).join(' '));
 
-        if (!emojiArg) return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+restrict <émoji> <rôle>`')] });
+        if (!emojiArg) return message.channel.send({ embeds: [EmbedHelper.error('Usage: `-restrict <émoji> <rôle>`')] });
         if (!role) return message.channel.send({ embeds: [EmbedHelper.error('Rôle introuvable.')] });
 
         const emojiId = emojiArg.match(/\d{15,}/)?.[0];

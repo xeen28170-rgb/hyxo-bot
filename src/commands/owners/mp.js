@@ -13,7 +13,8 @@ module.exports = {
         const target = await Helpers.resolveUser(client, args[0]);
         const text = args.slice(1).join(' ');
 
-        if (!target || !text) return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+mp <membre> <message>`')] });
+        const prefix = message.guildSettings?.prefix || client.prefix;
+        if (!target || !text) return message.channel.send({ embeds: [EmbedHelper.error(`Usage: \`${prefix}mp <membre> <message>\``)] });
 
         try {
             await target.send(text);

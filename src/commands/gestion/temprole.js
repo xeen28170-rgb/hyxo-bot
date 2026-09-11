@@ -4,6 +4,7 @@ const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
 const TempRole = require('../../models/TempRole');
 const PermissionsHelper = require('../../utils/permissions');
+const { safeSetTimeout } = require('../../utils/safeTimeout');
 
 module.exports = {
     name: 'temprole',
@@ -17,7 +18,8 @@ module.exports = {
         const duration = Helpers.parseDuration(args[2]);
 
         if (!member || !role || !duration) {
-            return message.channel.send({ embeds: [EmbedHelper.error(`❌ Usage: \`+temprole ${this.usage}\``)] });
+            const prefix = message.guildSettings?.prefix || client.prefix;
+            return message.channel.send({ embeds: [EmbedHelper.error(`❌ Usage: \`${prefix}temprole ${this.usage}\``)] });
         }
 
         if (role.managed) {
@@ -49,7 +51,7 @@ module.exports = {
 };
 
 function scheduleTempRoleExpiry(client, guildId, userId, roleId, delayMs) {
-    setTimeout(async () => {
+    safeSetTimeout(async () => {
         try {
             const guild = client.guilds.cache.get(guildId);
             if (!guild) return;

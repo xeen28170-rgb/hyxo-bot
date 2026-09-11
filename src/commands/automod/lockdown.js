@@ -8,17 +8,17 @@ module.exports = {
     aliases: ['ld', 'unlockdown'],
     category: 'automod',
     description: 'Verrouille ou déverrouille tous les salons du serveur.',
-    usage: '+lockdown [raison] | +unlockdown [raison]',
+    usage: '-lockdown | -unlockdown',
     permissions: ['ManageGuild'],
     botPermissions: ['ManageChannels'],
 
     async run(client, message, args, settings) {
         const guild = message.guild;
 
-        const usedAlias = message.content.trim().split(/\s+/)[0].replace(settings?.prefix || '+', '').toLowerCase();
+        const usedAlias = message.content.trim().split(/\s+/)[0].replace(settings?.prefix || '-', '').toLowerCase();
         const isUnlock = usedAlias === 'unlockdown';
 
-        const reason = args.join(' ') || (isUnlock ? 'Unlock manuel' : 'Lockdown manuel');
+        const reason = isUnlock ? 'Unlock manuel' : 'Lockdown manuel';
         const fullReason = `[${isUnlock ? 'UNLOCK' : 'LOCKDOWN'}] ${message.author.tag} — ${reason}`;
 
         const waiting = await message.channel.send({

@@ -3,17 +3,21 @@ const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
 const PermissionsHelper = require('../../utils/permissions');
 const Logger = require('../../utils/logger');
+const { safeSetTimeout } = require('../../utils/safeTimeout');
 
 module.exports = {
     name: 'cmute',
     category: 'moderation',
     description: 'Mettre en sourdine vocal un membre.',
-    usage: '+cmute <utilisateur> [durée] [raison]',
+    usage: '-cmute <utilisateur> [durée] [raison]',
     permissions: ['MuteMembers'],
     botPermissions: ['MuteMembers'],
     cooldown: 5,
     async run(client, message, args) {
-        if (!args[0]) return message.channel.send({ embeds: [EmbedHelper.error(`❌ Usage: \`${module.exports.usage}\``)] });
+        if (!args[0]) {
+            const prefix = message.guildSettings?.prefix || client.prefix;
+            return message.channel.send({ embeds: [EmbedHelper.error(`❌ Usage: \`${prefix}cmute <utilisateur> [durée] [raison]\``)] });
+        }
 
         const member = await Helpers.resolveMember(message.guild, args[0]);
         if (!member) return message.channel.send({ embeds: [EmbedHelper.error(message.t('general.invalid_user'))] });
@@ -28,7 +32,7 @@ module.exports = {
         await member.voice.setMute(true, `${message.author.tag} | ${reason}`);
 
         if (duration) {
-            setTimeout(async () => {
+            safeSetTimeout(async () => {
                 try {
                     const m = await message.guild.members.fetch(member.id).catch(() => null);
                     if (m?.voice.serverMute) await m.voice.setMute(false, 'Cmute expiré').catch(() => {});

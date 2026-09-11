@@ -7,7 +7,7 @@ module.exports = {
     name: 'clear',
     category: 'moderation',
     description: 'Supprimer des messages.',
-    usage: '+clear [nombre]',
+    usage: '-clear [nombre]',
     permissions: ['ManageMessages'],
     botPermissions: ['ManageMessages'],
     async run(client, message, args) {
@@ -46,9 +46,24 @@ module.exports = {
             messages = messages.filter(m => m.author.id === target.id);
         }
 
+        // Ne garder que les messages encore existants et non épinglés.
+        messages = messages.filter(m => m && !m.deleted && !m.pinned);
+
         await message.delete().catch(() => {});
-        const deleted = await message.channel.bulkDelete(messages, true);
-        
+
+        let deleted;
+        try {
+            deleted = await message.channel.bulkDelete([...messages.values()], true);
+        } catch {
+            // Fallback : suppression message par message si bulkDelete échoue
+            // (messages supprimés entre-temps, trop anciens, etc.)
+            let count = 0;
+            for (const m of messages.values()) {
+                try { await m.delete(); count++; } catch { /* déjà supprimé */ }
+            }
+            deleted = { size: count };
+        }
+
         const msg = await message.channel.send({ embeds: [EmbedHelper.success(`🧹 **${deleted.size}** messages ont été supprimés.`)] });
         setTimeout(() => msg.delete().catch(() => {}), 3000);
     },

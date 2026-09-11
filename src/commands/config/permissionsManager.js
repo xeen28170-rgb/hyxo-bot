@@ -26,7 +26,7 @@ module.exports = {
             const member = !role ? await Helpers.resolveMember(message.guild, targetText) : null;
             const targetId = role?.id || member?.id;
             if (!permission || !targetId) {
-                return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+set-perm del <permission/commande> <rôle/membre>`')] });
+                return message.channel.send({ embeds: [EmbedHelper.error('Usage: `-set-perm del <permission/commande> <rôle/membre>`')] });
             }
             await Guild.updateOne(
                 { guildId: message.guild.id },
@@ -41,6 +41,6 @@ module.exports = {
             return setPermissionCommand.run(client, message, args.slice(1));
         }
 
-        return message.channel.send({ embeds: [EmbedHelper.info('🛡️ Permissions Serveur', '`+set-perm set <perm/cmd> <rôle/membre>`\n`+set-perm del ...`\n`+set-perm clear`', { color: 0xFF0000 })] });
+        return message.channel.send({ embeds: [EmbedHelper.info('🛡️ Permissions Serveur', '`-set-perm set <perm/cmd> <rôle/membre>`\n`-set-perm del ...`\n`-set-perm clear`', { color: 0xFF0000 })] });
     },
 };

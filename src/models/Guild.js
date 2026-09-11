@@ -55,7 +55,7 @@ function scheduleSave() {
 function makeDefault(guildId) {
     return {
         guildId,
-        prefix: '+',
+        prefix: '-',
         language: 'fr',
         logs: {
             enabled: false, channel: null, modLogs: null, messageLogs: null,
@@ -70,6 +70,11 @@ function makeDefault(guildId) {
             muteRole: null, autoDehoistEnabled: false, autoModEnabled: false,
             useTimeout: false, publicCommands: true, restrictedChannels: [], noDerank: []
         },
+        prison: {
+            enabled: false, roleId: null, categoryId: null, jailChannelId: null, voiceChannelId: null,
+            prisoners: [],
+            notifyDM: { enabled: false, message: '', releaseMessage: '' }
+        },
         antiraid: {
             enabled: false, raidPingRole: null, antichannel: 'off', antirole: 'off',
             antiwebhook: 'off', antiban: 'off', antikick: 'off', antiunban: 'off', antibot: 'off',
@@ -81,6 +86,12 @@ function makeDefault(guildId) {
                 massjoin: 10, massjoinWindow: 8000
             },
             whitelist: [], blrankList: []
+        },
+        antidown: {
+            enabled: false,
+            vanity: null,
+            restore: true,
+            punishment: 'ban'
         },
         automod: {
             enabled: false,
@@ -108,6 +119,7 @@ function makeDefault(guildId) {
         boost: { enabled: false, channel: null, message: 'Merci {user} pour le boost!', role: null },
         statsChannels: null,
         owners: [],
+        ownerRoles: [],
         modRoles: [],
         adminRoles: [],
         totalCommands: 0,

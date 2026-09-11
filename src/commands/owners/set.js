@@ -33,9 +33,11 @@ module.exports = {
         }
 
         if (sub === 'profil') {
-            return message.channel.send({ embeds: [EmbedHelper.info('👤 Set Profil', 'Permet de modifier d\'un coup le profil du bot.\nUsage: `+set profil <nom> ,, <avatar_url> ,, <banner_url>`', { color: 0xFF0000 })] });
+            const prefix = message.guildSettings?.prefix || client.prefix;
+            return message.channel.send({ embeds: [EmbedHelper.info('👤 Set Profil', `Permet de modifier d'un coup le profil du bot.\nUsage: \`${prefix}set profil <nom> ,, <avatar_url> ,, <banner_url>\``, { color: 0xFF0000 })] });
         }
 
-        return message.channel.send({ embeds: [EmbedHelper.info('⚙️ Config Bot', '`+set name <nom>`\n`+set pic <lien>`\n`+set banner <lien>`\n`+set profil <bulk>`')] });
+        const prefix = message.guildSettings?.prefix || client.prefix;
+        return message.channel.send({ embeds: [EmbedHelper.info('⚙️ Config Bot', `\`${prefix}set name <nom>\`\n\`${prefix}set pic <lien>\`\n\`${prefix}set banner <lien>\`\n\`${prefix}set profil <bulk>\``)] });
     },
 };

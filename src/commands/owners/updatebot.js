@@ -36,12 +36,13 @@ module.exports = {
             }
 
             const commits = log.split('\n').slice(0, 10);
+            const prefix = message.guildSettings?.prefix || client.prefix;
             return statusMsg.edit({ embeds: [EmbedHelper.info('📦 Mises à jour disponibles', [
                 `${commits.length} nouveau(x) commit(s) :`,
                 '```',
                 ...commits,
                 '```',
-                'Utilisez `+updatebot install` pour installer.',
+                `Utilisez \`${prefix}updatebot install\` pour installer.`,
             ].join('\n'), { color: 0xF39C12 })] });
 
         } catch (error) {

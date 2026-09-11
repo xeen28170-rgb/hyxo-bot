@@ -8,7 +8,7 @@ module.exports = {
     name: 'antispam',
     category: 'automod',
     description: 'Configure AntiSpam et AntiFlood',
-    usage: '+antispam <on/off|nombre/durée|flood on/off|flood nombre/durée>',
+    usage: '-antispam <on/off|nombre/durée|flood on/off|flood nombre/durée>',
     permissions: ['ManageGuild'],
     async run(client, message, args) {
         const sub = args[0]?.toLowerCase();
@@ -36,12 +36,12 @@ module.exports = {
             if (!nombre || nombre < 2 || nombre > 20)
                 return message.channel.send({ embeds: [EmbedHelper.error('Le nombre de messages doit être entre 2 et 20.')] });
             if (!dureeStr)
-                return message.channel.send({ embeds: [EmbedHelper.error('Format invalide. Exemple: `+antispam 5/3s`')] });
+                return message.channel.send({ embeds: [EmbedHelper.error('Format invalide. Exemple: `-antispam 5/3s`')] });
 
             const ms = require('ms');
             const duration = ms(dureeStr);
             if (!duration || duration < 1000 || duration > 30000)
-                return message.channel.send({ embeds: [EmbedHelper.error('La durée doit être entre 1s et 30s. Exemple: `+antispam 5/3s`')] });
+                return message.channel.send({ embeds: [EmbedHelper.error('La durée doit être entre 1s et 30s. Exemple: `-antispam 5/3s`')] });
 
             await Guild.updateOne({ guildId: message.guild.id }, {
                 'automod.antispam.threshold': nombre,
@@ -78,7 +78,7 @@ async function handleFlood(client, message, args) {
         const ms = require('ms');
         const duration = ms(dureeStr);
         if (!duration || duration < 1000 || duration > 60000) {
-            return message.channel.send({ embeds: [EmbedHelper.error('La durée doit être entre 1s et 60s. Exemple: `+antispam flood 4/10s`')] });
+            return message.channel.send({ embeds: [EmbedHelper.error('La durée doit être entre 1s et 60s. Exemple: `-antispam flood 4/10s`')] });
         }
         await Guild.updateOne({ guildId: message.guild.id }, {
             'automod.antiflood.threshold': nombre,
@@ -106,10 +106,10 @@ async function sendStatus(client, message) {
         `**Durée Flood:** ${ms(flood?.duration || 10000)}`,
         '',
         '**Commandes:**',
-        '`+antispam on/off` — activer/désactiver',
-        '`+antispam 5/3s` — 5 messages en 3s = spam',
-        '`+antispam flood on/off` — activer l\'antiflood',
-        '`+antispam flood 4/10s` — 4 messages similaires en 10s',
+        '`-antispam on/off` — activer/désactiver',
+        '`-antispam 5/3s` — 5 messages en 3s = spam',
+        '`-antispam flood on/off` — activer l\'antiflood',
+        '`-antispam flood 4/10s` — 4 messages similaires en 10s',
     ].join('\n'), { color: 0xFF0000 });
     return message.channel.send({ embeds: [embed] });
 }

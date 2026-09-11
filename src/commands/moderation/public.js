@@ -12,8 +12,10 @@ module.exports = {
     permissions: ['ManageGuild'],
     async run(client, message, args) {
         const sub = args[0]?.toLowerCase();
-        if (!sub)
-            return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+public <on/off>` ou `+public <allow/deny/reset> [salon]`')] });
+        if (!sub) {
+            const prefix = message.guildSettings?.prefix || client.prefix;
+            return message.channel.send({ embeds: [EmbedHelper.error(`Usage: \`${prefix}public <on/off>\` ou \`${prefix}public <allow/deny/reset> [salon]\``)] });
+        }
 
         if (sub === 'on' || sub === 'off') {
             await Guild.updateOne({ guildId: message.guild.id }, { 'moderation.publicCommands': sub === 'on' });
@@ -37,6 +39,7 @@ module.exports = {
             }
         }
 
-        message.channel.send({ embeds: [EmbedHelper.error('Usage: `+public <on/off>` ou `+public <allow/deny/reset> [salon]`')] });
+        const prefix = message.guildSettings?.prefix || client.prefix;
+        message.channel.send({ embeds: [EmbedHelper.error(`Usage: \`${prefix}public <on/off>\` ou \`${prefix}public <allow/deny/reset> [salon]\``)] });
     },
 };

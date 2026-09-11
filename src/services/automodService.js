@@ -5,6 +5,7 @@ const SecurityLog = require('../models/SecurityLog');
 const Logger = require('../utils/logger');
 const EmbedHelper = require('../utils/embedBuilder');
 const LogDispatcher = require('../utils/logDispatcher');
+const { isWhitelisted } = require('../utils/whitelist');
 
 let filter = null;
 function getFilter() {
@@ -14,6 +15,11 @@ function getFilter() {
     return filter;
 }
 const floodHistory = new Map();
+const strikeLocks = new Map(); // guildId:userId → Promise (sérialise les strikes)
+const autoDeletedMessages = new Set(); // ids de messages supprimés par l'automod lui-même
+let lastFloodSweep = 0;
+const FLOOD_SWEEP_INTERVAL = 60 * 60 * 1000; // 1 h
+const FLOOD_ENTRY_TTL = 30 * 60 * 1000;      // 30 min
 
 const LINK_REGEX = /(?:https?:\/\/|www\.)[^\s]+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s]*)?/i;
 const INVITE_REGEX = /(?:discord\.gg|discord(?:app)?\.com\/invite|invite\.gg|dsc\.gg|discord\.me)\/[a-z0-9-]+/i;
@@ -66,6 +72,7 @@ function getFloodKey(message) {
 }
 
 function recordFloodMessage(message, duration) {
+    sweepFloodHistory();
     const now = Date.now();
     const key = getFloodKey(message);
     const history = floodHistory.get(key) || [];
@@ -79,6 +86,19 @@ function clearFloodHistory(message) {
     floodHistory.delete(getFloodKey(message));
 }
 
+// Évite une fuite mémoire : purge périodiquement les clés dont l'historique est vide
+// ou devenu trop ancien (l'utilisateur a cessé de parler).
+function sweepFloodHistory(force = false) {
+    const now = Date.now();
+    if (!force && now - lastFloodSweep < FLOOD_SWEEP_INTERVAL) return;
+    lastFloodSweep = now;
+    for (const [key, history] of floodHistory.entries()) {
+        const active = (history || []).filter(entry => now - entry.timestamp < FLOOD_ENTRY_TTL);
+        if (active.length === 0) floodHistory.delete(key);
+        else if (active.length !== history.length) floodHistory.set(key, active);
+    }
+}
+
 function canUseModerationAction(member, action) {
     if (!member) return false;
     if (action === 'timeout') return member.moderatable !== false;
@@ -87,13 +107,13 @@ function canUseModerationAction(member, action) {
     return true;
 }
 
-function isTrustedMember(client, message, settings) {
+async function isTrustedMember(client, message, settings) {
     const member = message.member;
     if (!member) return false;
     if (client.botOwners?.has(message.author.id) || client.owners?.has(message.author.id)) return true;
     if (settings?.owners?.includes(message.author.id)) return true;
-    if (settings?.antiraid?.whitelist?.includes(message.author.id)) return true;
-    return false;
+    const wl = settings?.antiraid?.whitelist || [];
+    return isWhitelisted(member, message.author.id, wl);
 }
 
 async function sendTemporaryWarning(message, content) {
@@ -110,7 +130,7 @@ const AutomodService = {
         if (!message.guild || message.author?.bot || !message.member) return false;
         if (automod.ignoredRoles?.some(roleId => message.member.roles.cache.has(roleId))) return false;
         if (automod.ignoredChannels?.includes(message.channelId)) return false;
-        if (isTrustedMember(client, message, settings)) return false;
+        if (await isTrustedMember(client, message, settings)) return false;
 
         const violation = await this.detectViolation(client, message, settings);
         if (!violation) return false;
@@ -194,6 +214,12 @@ const AutomodService = {
     },
 
     async handleViolation(client, message, settings, violation) {
+        // Marque le message comme supprimé par l'automod : le hook ghostping (messageDelete)
+        // ne doit alors PAS ajouter un double strike à l'utilisateur.
+        if (message?.id) {
+            autoDeletedMessages.add(message.id);
+            setTimeout(() => autoDeletedMessages.delete(message.id), 10_000);
+        }
         await message.delete().catch(() => {});
         await this.applyStrike(client, message, violation.reason, settings, violation);
     },
@@ -201,7 +227,12 @@ const AutomodService = {
     async handleGhostPing(client, message, settings) {
         if (!settings?.automod?.enabled || !settings.automod?.antighostping?.enabled) return false;
         if (!message.guild || message.author?.bot || !message.member) return false;
-        if (isTrustedMember(client, message, settings)) return false;
+        // Ne pas pénaliser deux fois un message déjà supprimé par l'automod lui-même.
+        if (message?.id && autoDeletedMessages.has(message.id)) {
+            autoDeletedMessages.delete(message.id);
+            return false;
+        }
+        if (await isTrustedMember(client, message, settings)) return false;
 
         const mentionedUsers = message.mentions?.users?.filter(user => !user.bot) || new Map();
         const mentionedRoles = message.mentions?.roles || new Map();
@@ -235,31 +266,44 @@ const AutomodService = {
         const member = message.member;
         if (!member) return;
 
-        const userStrikes = await this.getStrikes(message.author.id, message.guild.id);
-        const newCount = userStrikes + 1;
-        await this.setStrikes(message.author.id, message.guild.id, newCount);
+        // Sérialise les strikes par utilisateur : évite qu'une race condition
+        // (deux violations simultanées) incrémente deux fois depuis le même compteur.
+        const lockKey = `${message.guild.id}:${message.author.id}`;
+        const prev = strikeLocks.get(lockKey) || Promise.resolve();
+        const release = () => strikeLocks.delete(lockKey);
+        const run = prev.then(async () => {
+            try {
+                const userStrikes = await this.getStrikes(message.author.id, message.guild.id);
+                const newCount = userStrikes + 1;
+                await this.setStrikes(message.author.id, message.guild.id, newCount);
 
-        const punishment = this.resolvePunishment(automod, newCount, extra.moduleKey || REASON_TO_MODULE[reason]);
-        const maxStrikes = automod.strikes?.ban || 10;
+                const punishment = this.resolvePunishment(automod, newCount, extra.moduleKey || REASON_TO_MODULE[reason]);
+                const maxStrikes = automod.strikes?.ban || 10;
 
-        await this.logAutomod(client, message, settings, {
-            reason,
-            moduleKey: extra.moduleKey || REASON_TO_MODULE[reason],
-            count: extra.count || 1,
-            strikes: newCount,
-            punishment: punishment || 'none',
-            details: extra.details || {},
+                await this.logAutomod(client, message, settings, {
+                    reason,
+                    moduleKey: extra.moduleKey || REASON_TO_MODULE[reason],
+                    count: extra.count || 1,
+                    strikes: newCount,
+                    punishment: punishment || 'none',
+                    details: extra.details || {},
+                });
+
+                if (punishment) {
+                    await this.executePunishment(client, message, punishment, newCount, reason, settings);
+                    return;
+                }
+
+                await sendTemporaryWarning(
+                    message,
+                    `🚫 ${message.author}, violation détectée (${reason}). Strike ${newCount}/${maxStrikes}.`
+                );
+            } finally {
+                release();
+            }
         });
-
-        if (punishment) {
-            await this.executePunishment(client, message, punishment, newCount, reason, settings);
-            return;
-        }
-
-        await sendTemporaryWarning(
-            message,
-            `🚫 ${message.author}, violation détectée (${reason}). Strike ${newCount}/${maxStrikes}.`
-        );
+        strikeLocks.set(lockKey, run);
+        await run;
     },
 
     resolvePunishment(automod, strikesCount, moduleKey = null) {

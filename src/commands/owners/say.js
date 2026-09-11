@@ -12,6 +12,6 @@ module.exports = {
         if (!text) return;
         
         if (message.deletable) message.delete().catch(() => {});
-        await message.channel.send(text);
+        await message.channel.send({ content: text, allowedMentions: { parse: [] } });
     },
 };

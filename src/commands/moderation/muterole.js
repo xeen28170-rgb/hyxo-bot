@@ -9,7 +9,7 @@ module.exports = {
     aliases: ['setmuterole', 'set muterole'],
     category: 'moderation_config',
     description: 'Crée ou définit le rôle mute du serveur.',
-    usage: '+muterole [rôle]  —  sans argument : crée et configure automatiquement',
+    usage: '-muterole [rôle]  —  sans argument : crée et configure automatiquement',
     permissions: ['ManageRoles', 'ManageChannels'],
     async run(client, message, args) {
         let muteRole;

@@ -15,7 +15,7 @@ module.exports = {
         const perm = args[0]?.toLowerCase();
         const target = args.slice(1).join(' ');
 
-        if (!perm || !target) return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+set perm <permission/commande> <rôle/membre>`')] });
+        if (!perm || !target) return message.channel.send({ embeds: [EmbedHelper.error('Usage: `-set perm <permission/commande> <rôle/membre>`')] });
 
         const role = Helpers.resolveRole(message.guild, target);
         const member = !role ? await Helpers.resolveMember(message.guild, target) : null;

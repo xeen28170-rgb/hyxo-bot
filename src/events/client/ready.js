@@ -6,6 +6,7 @@ const cron = require('node-cron');
 const ReminderService = require('../../services/reminderService');
 const GiveawayService = require('../../services/giveawayService');
 const SanctionService = require('../../services/sanctionService');
+const AntiraidService = require('../../services/antiraidService');
 const TwitchService = require('../../services/twitchService');
 const TempRole = require('../../models/TempRole');
 const { scheduleTempRoleExpiry } = require('../../commands/gestion/temprole');
@@ -28,7 +29,7 @@ module.exports = {
         const setActivity = () => {
             const activities = [
                 { name: `${client.guilds.cache.size} serveurs`, type: ActivityType.Watching },
-                { name: '+help | Gestions', type: ActivityType.Playing },
+                { name: '-help | Gestions', type: ActivityType.Playing },
                 { name: `${client.commands.size} commandes`, type: ActivityType.Listening },
             ];
             const activity = activities[Math.floor(Math.random() * activities.length)];
@@ -47,6 +48,9 @@ module.exports = {
         cron.schedule('*/5 * * * *', async () => {
             Logger.debug(`Heartbeat | Ping: ${client.ws.ping}ms | RAM: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`);
             try { await TwitchService.processAlerts(client); } catch (err) { Logger.error('Cron Twitch:', err); }
+            // Purge périodique des caches antiraid en mémoire (audit logs déjà
+            // traités, compteurs, antiRaidCache du client) pour éviter les fuites.
+            try { AntiraidService.cleanupCache(client); } catch (err) { Logger.error('Cron antiraid cleanup:', err); }
         });
 
 

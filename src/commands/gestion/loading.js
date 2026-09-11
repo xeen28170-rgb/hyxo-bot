@@ -11,7 +11,8 @@ module.exports = {
         const durationStr = args[0];
         const text = args.slice(1).join(' ');
         
-        if (!durationStr || !text) return message.channel.send({ embeds: [EmbedHelper.error(`Usage: \`${client.prefix}loading <durée> <message>\``)] });
+        const prefix = message.guildSettings?.prefix || client.prefix;
+        if (!durationStr || !text) return message.channel.send({ embeds: [EmbedHelper.error(`Usage: \`${prefix}loading <durée> <message>\``)] });
 
         const ms = require('ms')(durationStr);
         if (!ms) return message.channel.send({ embeds: [EmbedHelper.error('Durée invalide.')] });

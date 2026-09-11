@@ -10,7 +10,7 @@ module.exports = {
     category: 'backup',
     ownerOnly: false,
     description: 'Gérer les backups du serveur.',
-    usage: '+backup <create|restore|list|delete> [id]',
+    usage: '-backup <create|restore|list|delete> [id]',
     permissions: ['Administrator'],
     cooldown: 10,
     async run(client, message, args) {
@@ -29,8 +29,15 @@ module.exports = {
             if (!backup) return message.channel.send({ embeds: [EmbedHelper.error('Sauvegarde introuvable.')] });
 
             await message.channel.send({ embeds: [EmbedHelper.info('📥 Restauration...', 'Restauration en cours, merci de patienter.')] });
-            await BackupService.restore(message.guild, id);
-            return message.channel.send({ embeds: [EmbedHelper.success('Le serveur a été restauré avec succès.')] });
+            const report = await BackupService.restore(message.guild, id);
+            if (!report) return message.channel.send({ embeds: [EmbedHelper.error('Sauvegarde introuvable.')] });
+
+            const lines = [
+                `**Rôles :** ${report.roles.filter(r => r.status === 'created').length} créés, ${report.roles.filter(r => r.status === 'duplicate').length} déjà présents, ${report.roles.filter(r => r.status === 'failed').length} en échec`,
+                `**Salons :** ${report.channels.filter(c => c.status === 'created').length} créés, ${report.channels.filter(c => c.status === 'duplicate').length} déjà présents, ${report.channels.filter(c => c.status === 'failed').length} en échec`,
+            ];
+            if (report.failed > 0) lines.push('⚠️ Certains éléments n\'ont pas pu être restaurés (vérifiez les permissions du bot).');
+            return message.channel.send({ embeds: [EmbedHelper.success(`Le serveur a été restauré avec succès.\n${lines.join('\n')}`)] });
         }
 
         if (sub === 'list') {
@@ -39,7 +46,7 @@ module.exports = {
             return message.channel.send({ embeds: [embed] });
         }
 
-        return message.channel.send({ embeds: [EmbedHelper.info('📥 Backups — Aide', '`+backup create`\n`+backup restore <id>`\n`+backup list`')] });
+        return message.channel.send({ embeds: [EmbedHelper.info('📥 Backups — Aide', '`-backup create`\n`-backup restore <id>`\n`-backup list`')] });
     },
 };
 

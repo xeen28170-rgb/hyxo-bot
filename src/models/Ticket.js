@@ -122,4 +122,14 @@ module.exports = {
         const tickets = Object.values(store).filter(t => t.guildId === guildId);
         return tickets.length ? Math.max(...tickets.map(t => t.ticketId || 0)) + 1 : 1;
     },
+
+    deleteOne: async (query) => {
+        await ensureLoaded();
+        const doc = Object.values(store).find(ticket => matchesQuery(ticket, query));
+        if (doc) {
+            delete store[doc.channelId];
+            scheduleSave();
+        }
+        return { deletedCount: doc ? 1 : 0 };
+    },
 };

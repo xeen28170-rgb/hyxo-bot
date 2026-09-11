@@ -39,14 +39,15 @@ module.exports = {
         const channelId = settings.config?.modmailChannel;
         const categoryId = settings.config?.modmailCategory;
 
+        const prefix = message.guildSettings?.prefix || client.prefix;
         const embed = EmbedHelper.info('📩 Configuration Modmail', [
             `**Salon:** ${channelId ? `<#${channelId}>` : 'Non configuré'}`,
             `**Catégorie tickets:** ${categoryId ? `<#${categoryId}>` : 'Non configurée'}`,
             '',
             '**Usage:**',
-            '`+modmail set [#salon]` — Définir le salon de réception',
-            '`+modmail category <catégorie>` — Catégorie des tickets modmail',
-            '`+modmail off` — Désactiver',
+            `\`${prefix}modmail set [#salon]\` — Définir le salon de réception`,
+            `\`${prefix}modmail category <catégorie>\` — Catégorie des tickets modmail`,
+            `\`${prefix}modmail off\` — Désactiver`,
         ].join('\n'), { color: 0xFF0000 });
 
         message.channel.send({ embeds: [embed] });

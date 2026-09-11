@@ -14,7 +14,7 @@ module.exports = {
     async run(client, message, args) {
         const status = args[0]?.toLowerCase();
         if (!['on', 'off'].includes(status))
-            return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+autopublish <on/off> [salon]`')] });
+            return message.channel.send({ embeds: [EmbedHelper.error('Usage: `-autopublish <on/off> [salon]`')] });
 
         const channel = Helpers.resolveChannel(message.guild, args[1]) || message.channel;
 

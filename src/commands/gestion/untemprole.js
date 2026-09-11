@@ -16,7 +16,8 @@ module.exports = {
         const role = Helpers.resolveRole(message.guild, args[1]);
 
         if (!member || !role) {
-            return message.channel.send({ embeds: [EmbedHelper.error(`❌ Usage: \`+untemprole ${this.usage}\``)] });
+            const prefix = message.guildSettings?.prefix || client.prefix;
+            return message.channel.send({ embeds: [EmbedHelper.error(`❌ Usage: \`${prefix}untemprole ${this.usage}\``)] });
         }
 
         if (!member.roles.cache.has(role.id)) {

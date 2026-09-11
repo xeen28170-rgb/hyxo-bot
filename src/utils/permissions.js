@@ -11,6 +11,14 @@ const PermissionLevel = {
     BOT_OWNER: 5,
 };
 
+// Le "propriétaire" absolu du bot (celui qui peut unblacklist, etc.).
+// Priorité : BOT_PROPRIETAIRE_ID, sinon le premier ID de OWNER_IDS.
+const PROPRIETAIRE_ID = (
+    process.env.BOT_PROPRIETAIRE_ID
+    || (process.env.OWNER_IDS || '').split(',')[0]
+    || ''
+).trim();
+
 // Chargement dynamique des IDs créateurs depuis .env (CREATOR_IDS=id1,id2,...)
 const CREATOR_IDS = new Set(
     (process.env.CREATOR_IDS || process.env.OWNER_IDS || '')
@@ -35,6 +43,14 @@ const PermissionsHelper = {
     },
 
     /**
+     * Vérifier si un utilisateur est le propriétaire absolu du bot
+     * (le seul qui peut retirer de la blacklist, etc.)
+     */
+    isProprietaire(userId) {
+        return Boolean(userId && PROPRIETAIRE_ID && String(userId) === PROPRIETAIRE_ID);
+    },
+
+    /**
      * Vérifier si un utilisateur est propriétaire du serveur (la couronne)
      */
     isGuildOwner(member) {
@@ -49,8 +65,10 @@ const PermissionsHelper = {
             guildSettings = await getGuildSettings(member.client || member.guild.client, member.guild.id, { create: false });
         }
         if (this.isCreator(member.id)) return true;
-        
-        return guildSettings?.owners?.includes(member.id) || this.isGuildOwner(member);
+        if (this.isGuildOwner(member)) return true;
+        if (guildSettings?.owners?.includes(member.id)) return true;
+        if (Array.isArray(guildSettings?.ownerRoles) && guildSettings.ownerRoles.some(roleId => member.roles.cache.has(roleId))) return true;
+        return false;
     },
 
     /**

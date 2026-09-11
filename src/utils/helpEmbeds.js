@@ -3,15 +3,16 @@
 const { EmbedBuilder, StringSelectMenuBuilder, ActionRowBuilder } = require('discord.js');
 
 const HELP_CATEGORIES = {
-    security: { label: 'Sécurité', emoji: '🛡️', description: 'Protections antiraid, whitelist et console Protect.' },
-    moderation: { label: 'Modération', emoji: '🔨', description: 'Sanctions, rôles, salons et actions de modération.' },
-    logs: { label: 'Logs', emoji: '📜', description: 'Journaux serveur, sécurité, modération et statistiques.' },
-    tickets: { label: 'Tickets', emoji: '🎫', description: 'Support, tickets, panels et modmail.' },
-    utility: { label: 'Utilitaires', emoji: '⚙️', description: 'Informations, outils rapides et commandes publiques.' },
-    administration: { label: 'Administration', emoji: '👑', description: 'Configuration serveur, rôles, permissions et gestion.' },
-    giveaways: { label: 'Giveaways', emoji: '🎉', description: 'Création, gestion et configuration des giveaways.' },
-    backups: { label: 'Backups', emoji: '💾', description: 'Sauvegardes et restauration de configuration serveur.' },
-    ownerbot: { label: 'Owner Bot', emoji: '👑', description: 'Commandes réservées aux owners du bot.' },
+    security: { label: 'Sécurité', emoji: '🛡️', description: 'Protections antiraid, whitelist et console Protect.', color: 0xED4245 },
+    moderation: { label: 'Modération', emoji: '🔨', description: 'Sanctions, rôles, salons et actions de modération.', color: 0xFEE75C },
+    logs: { label: 'Logs', emoji: '📜', description: 'Journaux serveur, sécurité, modération et statistiques.', color: 0x57F287 },
+    tickets: { label: 'Tickets', emoji: '🎫', description: 'Support, tickets, panels et modmail.', color: 0x5865F2 },
+    utility: { label: 'Utilitaires', emoji: '⚙️', description: 'Informations, outils rapides et commandes publiques.', color: 0xEB459E },
+    administration: { label: 'Administration', emoji: '👑', description: 'Configuration serveur, rôles, permissions et gestion.', color: 0xF47B67 },
+    giveaways: { label: 'Giveaways', emoji: '🎉', description: 'Création, gestion et configuration des giveaways.', color: 0x9B59B6 },
+    backups: { label: 'Backups', emoji: '💾', description: 'Sauvegardes et restauration de configuration serveur.', color: 0x1ABC9C },
+    tempvoc: { label: 'TempVoc', emoji: '🎤', description: 'Salons vocaux temporaires et gestion.', color: 0xE91E63 },
+    ownerbot: { label: 'Owner Bot', emoji: '🔧', description: 'Commandes réservées aux owners du bot.', color: 0x2F3136 },
 };
 
 const HELP_COLOR = 0xC41E3A;
@@ -19,6 +20,8 @@ const EMBED_DESCRIPTION_LIMIT = 4096;
 const HELP_CATEGORY_BY_COMMAND = buildHelpCategoryMap({
     security: [
         'secur',
+        'antidown',
+        'wl',
         'blrank',
         'creation',
         'raidping',
@@ -49,26 +52,33 @@ const HELP_CATEGORY_BY_COMMAND = buildHelpCategoryMap({
         'hide',
         'hideall',
         'kick',
+        'laisse',
         'lock',
         'lockall',
         'massiverole',
         'mute',
         'mutelist',
+        'prison',
+        'public',
         'renew',
         'sanctions',
         'slowmode',
         'sync',
         'temprole',
+        'timeout',
         'unban',
         'unbanall',
         'uncmute',
         'unhide',
         'unhideall',
+        'unlaisse',
         'unlock',
         'unlockall',
         'unmassiverole',
         'unmute',
         'unmuteall',
+        'unprison',
+        'unprisonall',
         'untemprole',
         'voicekick',
         'voicemove',
@@ -138,7 +148,6 @@ const HELP_CATEGORY_BY_COMMAND = buildHelpCategoryMap({
         'newsticker',
         'perms',
         'prefix',
-        'public',
         'report',
         'restrict',
         'rolemenu',
@@ -148,7 +157,6 @@ const HELP_CATEGORY_BY_COMMAND = buildHelpCategoryMap({
         'showpics',
         'soutien',
         'tempvoc',
-        'timeout',
         'twitch',
         'unrestrict',
     ],
@@ -182,9 +190,10 @@ function buildHelpCategoryMap(groups) {
 }
 
 function formatUsage(prefix, command) {
-    const usage = command.usage?.trim();
+    const usage = (command.usage || '').trim();
     if (!usage) return `${prefix}${command.name}`;
-    return usage.startsWith(prefix) ? usage : `${prefix}${command.name} ${usage}`.trim();
+    const noPrefix = usage.replace(/^[+\-!/\\.#@]+\s*/, '');
+    return `${prefix}${command.name} ${noPrefix}`.trim();
 }
 
 function classifyCommand(command) {
@@ -201,7 +210,8 @@ function classifyCommand(command) {
     if (['backup', 'autobackup'].includes(name) || category === 'backup') return 'backups';
     if (category === 'tickets') return 'tickets';
     if (category === 'giveaway') return 'giveaways';
-    if (category === 'custom' || category === 'config' || category === 'gestion' || category === 'tempvoc' || category === 'moderation_config') return 'administration';
+    if (category === 'tempvoc') return 'tempvoc';
+    if (category === 'custom' || category === 'config' || category === 'gestion' || category === 'moderation_config') return 'administration';
     return 'utility';
 }
 
@@ -217,7 +227,7 @@ function compactText(value, maxLength) {
 
 function buildCompactCommandLine(prefix, command, descriptionLength) {
     const description = compactText(command.description || 'Aucune description.', descriptionLength);
-    return `\`${formatUsage(prefix, command)}\` - ${description}`;
+    return `\`${formatUsage(prefix, command)}\` — ${description}`;
 }
 
 function buildSingleCategoryDescription(info, commands, prefix) {
@@ -240,10 +250,10 @@ function buildCategoryEmbedArray(commands, categoryKey, prefix, client = null) {
 
     const sorted = [...commands.values()].sort((left, right) => left.name.localeCompare(right.name));
     const embed = new EmbedBuilder()
-        .setColor(HELP_COLOR)
+        .setColor(info.color || HELP_COLOR)
         .setTitle(`${info.emoji} ${info.label}`)
         .setDescription(buildSingleCategoryDescription(info, sorted, prefix))
-        .setFooter({ text: `${sorted.length} commande${sorted.length > 1 ? 's' : ''}` })
+        .setFooter({ text: `${sorted.length} commande${sorted.length > 1 ? 's' : ''} • ${prefix}help <commande> pour plus de détails` })
         .setTimestamp();
     if (client?.user) {
         embed.setAuthor({ name: client.user.username, iconURL: client.user.displayAvatarURL() });
@@ -260,40 +270,88 @@ function buildAllCategoryEmbedsFlat(client, prefix) {
     return embeds;
 }
 
-function buildHelpMenuEmbed(client) {
+function buildHelpMenuEmbed(client, prefix = '-') {
     const total = client.commands?.size ?? 0;
+
     const categoryLines = Object.entries(HELP_CATEGORIES).map(([key, info]) => {
         const count = getCommandsForHelpCategory(client, key).size;
+        if (count === 0) return null;
         return `${info.emoji} **${info.label}** — \`${count}\` commande${count > 1 ? 's' : ''}`;
-    });
+    }).filter(Boolean);
 
     return new EmbedBuilder()
         .setColor(HELP_COLOR)
         .setAuthor({ name: client.user.username, iconURL: client.user.displayAvatarURL() })
-        .setTitle('Centre d’aide Protect')
+        .setTitle('Centre d\'aide')
         .setDescription([
-            'Une interface claire pour trouver rapidement les commandes utiles.',
+            '> *Trouvez rapidement la commande qu\'il vous faut.*',
             '',
-            categoryLines.join('\n'),
+            '┌─────────────────────────────┐',
+            ...categoryLines.map(line => `│ ${line}`),
+            '└─────────────────────────────┘',
             '',
-            `Total: **${total}** commandes disponibles.`,
+            `**${total}** commandes au total`,
+            '',
+            '> Utilisez le menu ci-dessous pour explorer une catégorie.',
+            `> Tapez \`${prefix}help <commande>\` pour les détails d'une commande.`,
         ].join('\n'))
-        .setThumbnail(client.user.displayAvatarURL())
-        .setFooter({ text: 'Sélectionne une catégorie dans le menu.' })
+        .setThumbnail(client.user.displayAvatarURL({ size: 256 }))
         .setTimestamp();
+}
+
+function buildHelpCommandEmbed(client, command, prefix = '-') {
+    const categoryKey = classifyCommand(command);
+    const info = HELP_CATEGORIES[categoryKey];
+
+    const embed = new EmbedBuilder()
+        .setColor(info?.color || HELP_COLOR)
+        .setTitle(`${info?.emoji || '📖'} ${command.name}`)
+        .setDescription(command.description || 'Aucune description disponible.');
+
+    if (command.usage) {
+        const noPrefix = command.usage.replace(/^[+\-!/\\.#@]+\s*/, '');
+        embed.addFields({ name: '📝 Usage', value: `\`${prefix}${command.name} ${noPrefix}\``, inline: true });
+    }
+
+    if (command.permissions?.length) {
+        embed.addFields({ name: '🔑 Permissions', value: command.permissions.map(p => `\`${p}\``).join(', '), inline: true });
+    }
+
+    if (command.botPermissions?.length) {
+        embed.addFields({ name: '🤖 Permissions Bot', value: command.botPermissions.map(p => `\`${p}\``).join(', '), inline: true });
+    }
+
+    if (command.aliases?.length) {
+        embed.addFields({ name: '🔗 Aliases', value: command.aliases.map(a => `\`${a}\``).join(', '), inline: true });
+    }
+
+    if (command.cooldown) {
+        embed.addFields({ name: '⏱️ Cooldown', value: `\`${command.cooldown}s\``, inline: true });
+    }
+
+    if (info) {
+        embed.addFields({ name: '📂 Catégorie', value: `${info.emoji} ${info.label}`, inline: true });
+    }
+
+    embed.setFooter({ text: `${prefix}help — Retour au menu principal` })
+        .setTimestamp();
+
+    return embed;
 }
 
 function buildHelpSelectRow(client, authorId) {
     const select = new StringSelectMenuBuilder()
         .setCustomId(`help_category_select:${authorId}`)
-        .setPlaceholder('Choisir une catégorie')
+        .setPlaceholder('📂 Choisir une catégorie')
         .addOptions(
-            Object.entries(HELP_CATEGORIES).map(([key, info]) => ({
-                label: info.label,
-                description: info.description.slice(0, 100),
-                emoji: info.emoji,
-                value: key,
-            }))
+            Object.entries(HELP_CATEGORIES)
+                .filter(([key]) => getCommandsForHelpCategory(client, key).size > 0)
+                .map(([key, info]) => ({
+                    label: info.label,
+                    description: info.description.slice(0, 100),
+                    emoji: info.emoji,
+                    value: key,
+                }))
         );
     return new ActionRowBuilder().addComponents(select);
 }
@@ -307,5 +365,6 @@ module.exports = {
     buildCategoryEmbedArray,
     buildAllCategoryEmbedsFlat,
     buildHelpMenuEmbed,
+    buildHelpCommandEmbed,
     buildHelpSelectRow,
 };

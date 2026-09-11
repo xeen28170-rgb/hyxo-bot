@@ -18,6 +18,6 @@ module.exports = {
             return message.channel.send({ embeds: [EmbedHelper.success(`Limite de création de compte réglée sur **${limit}**.`)] });
         }
 
-        return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+creation limit <durée>` (ex: 2d, 1w)')] });
+        return message.channel.send({ embeds: [EmbedHelper.error('Usage: `-creation limit <durée>` (ex: 2d, 1w)')] });
     },
 };

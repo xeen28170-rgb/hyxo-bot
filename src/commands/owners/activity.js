@@ -29,7 +29,8 @@ module.exports = {
         }
 
         const text = textArgs.join(' ');
-        if (!text) return message.channel.send({ embeds: [EmbedHelper.error('Fournis un texte d\'activité (ex: `+activity listen de la musique`).')] });
+        const prefix = message.guildSettings?.prefix || client.prefix;
+        if (!text) return message.channel.send({ embeds: [EmbedHelper.error(`Fournis un texte d'activité (ex: \`${prefix}activity listen de la musique\`).`)] });
 
         client.user.setActivity(text, { type, url: type === ActivityType.Streaming ? 'https://twitch.tv/discord' : undefined });
         message.channel.send({ embeds: [EmbedHelper.success(`Activité changée en : **${text}**`)] });

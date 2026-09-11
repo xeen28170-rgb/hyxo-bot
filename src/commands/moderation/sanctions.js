@@ -3,12 +3,13 @@
 const Sanction = require('../../models/Sanction');
 const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
+const Logger = require('../../utils/logger');
 
 module.exports = {
     name: 'sanctions',
     category: 'moderation',
     description: 'Affiche ou gère les sanctions d\'un membre',
-    usage: '+sanctions <membre> | del <caseId> | clear <membre> | clear all',
+    usage: '-sanctions <membre> | del <caseId> | clear <membre> | clear all',
     permissions: ['ManageMessages'],
     async run(client, message, args) {
         try {
@@ -16,7 +17,8 @@ module.exports = {
 
             if (sub === 'del') {
                 const caseId = parseInt(args[1]);
-                if (!caseId) return message.channel.send({ embeds: [EmbedHelper.error('❌ Usage: `+sanctions del <caseId>`')] });
+                const prefix = message.guildSettings?.prefix || client.prefix;
+                if (!caseId) return message.channel.send({ embeds: [EmbedHelper.error(`❌ Usage: \`${prefix}sanctions del <caseId>\``)] });
 
                 const all = await Sanction.find({ guildId: message.guild.id });
                 const sanction = all.find(s => s.caseId === caseId);
@@ -78,7 +80,7 @@ module.exports = {
             message.channel.send({ embeds: [embed] });
 
         } catch (err) {
-            console.error(err);
+            Logger.error('Erreur lors de la gestion des sanctions:', err);
             message.channel.send({ embeds: [EmbedHelper.error(`Une erreur est survenue : ${err.message}`)] });
         }
     },

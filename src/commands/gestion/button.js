@@ -32,7 +32,8 @@ module.exports = {
         }
 
         if (sub === 'add' && !args[2]) {
-            return message.channel.send({ embeds: [EmbedHelper.error('Usage: +button add <lien> <label>')] });
+            const prefix = message.guildSettings?.prefix || client.prefix;
+            return message.channel.send({ embeds: [EmbedHelper.error(`Usage: \`${prefix}button add <lien> <label>\``)] });
         }
 
         const settings = message.guildSettings || await Guild.findOne({ guildId: message.guild.id });
@@ -48,7 +49,8 @@ module.exports = {
 
         const index = parseInt(url) - 1;
         if (isNaN(index) || index < 0 || index >= buttons.length) {
-            return message.channel.send({ embeds: [EmbedHelper.error('Index invalide. Utilisez +button list pour voir les index.')] });
+            const prefix = message.guildSettings?.prefix || client.prefix;
+            return message.channel.send({ embeds: [EmbedHelper.error(`Index invalide. Utilisez \`${prefix}button list\` pour voir les index.`)] });
         }
 
         const removed = buttons.splice(index, 1)[0];

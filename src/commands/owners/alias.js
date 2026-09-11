@@ -10,7 +10,8 @@ module.exports = {
     usage: '<commande>',
     async run(client, message, args) {
         const cmd = args[0]?.toLowerCase();
-        if (!cmd) return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+alias <commande>`')] });
+        const prefix = message.guildSettings?.prefix || client.prefix;
+        if (!cmd) return message.channel.send({ embeds: [EmbedHelper.error(`Usage: \`${prefix}alias <commande>\``)] });
 
         const command = client.commands.get(cmd);
         if (!command) return message.channel.send({ embeds: [EmbedHelper.error(`Commande \`${cmd}\` introuvable.`)] });

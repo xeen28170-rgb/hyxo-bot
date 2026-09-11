@@ -11,8 +11,10 @@ module.exports = {
         const settings = client.cache.getGuild(message.guild.id);
         const muteRoleId = settings?.moderation?.muteRole;
 
-        if (!muteRoleId)
-            return message.channel.send({ embeds: [EmbedHelper.error('Aucun rôle mute configuré. Utilisez `+setmuterole` d\'abord.')] });
+        if (!muteRoleId) {
+            const prefix = message.guildSettings?.prefix || client.prefix;
+            return message.channel.send({ embeds: [EmbedHelper.error(`Aucun rôle mute configuré. Utilisez \`${prefix}setmuterole\` d\'abord.`)] });
+        }
 
         const muteRole = message.guild.roles.cache.get(muteRoleId);
         if (!muteRole)

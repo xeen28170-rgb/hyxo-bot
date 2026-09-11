@@ -117,6 +117,13 @@ class LogDispatcher {
         return this.send(guild, 'modLogs', embed);
     }
 
+    static async prison(guild, embed) {
+        const settings = await getGuildSettings(guild.client, guild.id, { create: false });
+        const channelId = settings?.logs?.prisonLogs || settings?.logs?.modLogs;
+        if (!channelId) return this.send(guild, 'modLogs', embed);
+        return this.send(guild, 'prisonLogs', embed);
+    }
+
     static async moderationAction(guild, action, embed) {
         const actionToLog = {
             warn: 'warnLogs',

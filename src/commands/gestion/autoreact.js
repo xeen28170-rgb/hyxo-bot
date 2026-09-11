@@ -25,7 +25,8 @@ module.exports = {
         if (sub === 'add') {
             const channel = Helpers.resolveChannel(message.guild, args[1]);
             const emoji = args[2];
-            if (!channel || !emoji) return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+autoreact add <salon> <émoji>`')] });
+            const prefix = message.guildSettings?.prefix || client.prefix;
+            if (!channel || !emoji) return message.channel.send({ embeds: [EmbedHelper.error(`Usage: \`${prefix}autoreact add <salon> <émoji>\``)] });
 
             const settings = message.guildSettings || await getGuildSettings(client, message.guild.id);
             const reacts = settings.config?.autoreacts || [];
@@ -38,7 +39,8 @@ module.exports = {
         if (sub === 'del') {
             const channel = Helpers.resolveChannel(message.guild, args[1]);
             const emoji = args[2];
-            if (!channel) return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+autoreact del <salon> [émoji]`')] });
+            const prefix = message.guildSettings?.prefix || client.prefix;
+            if (!channel) return message.channel.send({ embeds: [EmbedHelper.error(`Usage: \`${prefix}autoreact del <salon> [émoji]\``)] });
 
             const settings = message.guildSettings || await getGuildSettings(client, message.guild.id);
             let reacts = settings.config?.autoreacts || [];
@@ -48,6 +50,7 @@ module.exports = {
             return message.channel.send({ embeds: [EmbedHelper.success(`Réaction automatique supprimée dans <#${channel.id}>.`)] });
         }
 
-        message.channel.send({ embeds: [EmbedHelper.info('⭐ Autoreact', '`+autoreact add <salon> <émoji>`\n`+autoreact del <salon> [émoji]`\n`+autoreact list`', { color: 0xFF0000 })] });
+        const prefix = message.guildSettings?.prefix || client.prefix;
+        message.channel.send({ embeds: [EmbedHelper.info('⭐ Autoreact', `\`${prefix}autoreact add <salon> <émoji>\`\n\`${prefix}autoreact del <salon> [émoji]\`\n\`${prefix}autoreact list\``, { color: 0xFF0000 })] });
     },
 };

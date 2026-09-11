@@ -31,7 +31,7 @@
       "success": "🔇 **{user}** muted.\n**Reason:** {reason}",
       "temp_success": "🔇 **{user}** muted for **{duration}**.\n**Reason:** {reason}",
       "already_muted": "❌ This user is already muted.",
-      "no_mute_role": "❌ No mute role configured. Use `+config muterole <role>`.",
+      "no_mute_role": "❌ No mute role configured. Use `-config muterole <role>`.",
       "unmute_success": "🔊 **{user}** unmuted.\n**Reason:** {reason}",
       "not_muted": "❌ This user is not muted.",
       "expired": "🔊 **{user}**'s mute expired."

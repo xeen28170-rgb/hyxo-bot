@@ -6,7 +6,7 @@ module.exports = {
     name: 'uncmute',
     category: 'moderation',
     description: 'Retirer la sourdine vocal d\'un membre.',
-    usage: '+uncmute <utilisateur> [raison]',
+    usage: '-uncmute <utilisateur>',
     permissions: ['MuteMembers'],
     botPermissions: ['MuteMembers'],
     cooldown: 5,
@@ -16,7 +16,7 @@ module.exports = {
         if (!member) return message.channel.send({ embeds: [EmbedHelper.error(message.t('general.invalid_user'))] });
         if (!member.voice.channel) return message.channel.send({ embeds: [EmbedHelper.error('❌ Ce membre n\'est pas dans un salon vocal.')] });
 
-        const reason = args.slice(1).join(' ') || message.t('general.no_reason');
+        const reason = 'Aucune raison fournie';
         await member.voice.setMute(false, `${message.author.tag} | ${reason}`);
         message.channel.send({ embeds: [EmbedHelper.success(message.t('moderation.cmute.uncmute_success', { user: member.user.tag, reason }))] });
     },

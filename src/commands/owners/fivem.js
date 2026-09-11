@@ -19,7 +19,10 @@ module.exports = {
         const info = await FiveMService.getServerInfo(ip);
 
         if (!info.online) {
-            return status.edit({ embeds: [EmbedHelper.error(`Impossible de contacter le serveur \`${ip}\`. Vérifiez l'adresse.`)] });
+            const reason = info.error === 'adresse_invalide'
+                ? 'L\'adresse doit être une IP publique (`ip:port`) ou un lien `cfx.re/...`.'
+                : `Impossible de contacter le serveur \`${ip}\`. Vérifiez l'adresse.`;
+            return status.edit({ embeds: [EmbedHelper.error(reason)] });
         }
 
         const embed = EmbedHelper.info('🎮 FiveM — Informations du serveur', [

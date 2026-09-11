@@ -7,7 +7,7 @@ module.exports = {
     name: 'ping',
     category: 'utility',
     description: 'Voir la latence du bot.',
-    usage: '+ping',
+    usage: '-ping',
     cooldown: 5,
     async run(client, message) {
         const start = Date.now();

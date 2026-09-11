@@ -14,7 +14,7 @@ module.exports = {
     async run(client, message, args) {
         const sub = args[0]?.toLowerCase();
         if (!sub || !['add', 'del', 'list'].includes(sub))
-            return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+noderank <add/del/list> <rôle>`')] });
+            return message.channel.send({ embeds: [EmbedHelper.error('Usage: `-noderank <add/del/list> <rôle>`')] });
 
         if (sub === 'list') {
             const settings = message.guildSettings || await getGuildSettings(client, message.guild.id);

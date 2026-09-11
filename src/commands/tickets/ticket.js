@@ -21,7 +21,7 @@ module.exports = {
     name: 'ticket',
     category: 'tickets',
     description: 'Ouvre le panneau de gestion des tickets.',
-    usage: '+ticket',
+    usage: '-ticket',
     permissions: ['ManageChannels'],
     cooldown: 5,
     async run(client, message, args) {
@@ -248,7 +248,8 @@ async function sendTicketAdminPanel(client, message) {
 async function sendPanel(client, message, args) {
     const settings = message.guildSettings || await getGuildSettings(client, message.guild.id, { create: false });
     if (!settings?.tickets?.enabled) {
-        return message.channel.send({ embeds: [EmbedHelper.error('❌ Le système de tickets est désactivé. Utilisez `+ticket enable`')] });
+        const prefix = message.guildSettings?.prefix || client.prefix;
+        return message.channel.send({ embeds: [EmbedHelper.error(`❌ Le système de tickets est désactivé. Utilisez \`${prefix}ticket enable\``)] });
     }
     const channel = Helpers.resolveChannel(message.guild, args[0]) || message.channel;
     await TicketService.sendPanel(channel, settings);
@@ -345,18 +346,19 @@ async function setSupportRole(client, message, args) {
 }
 
 function sendHelp(message) {
+    const prefix = message.guildSettings?.prefix || client.prefix;
     const embed = EmbedHelper.info('🎫 Tickets — Aide', [
-        '`+ticket enable` — Activer les tickets',
-        '`+ticket disable` — Désactiver les tickets',
-        '`+ticket panel [#salon]` — Envoyer le panneau',
-        '`+ticket close [raison]` — Fermer le ticket',
-        '`+ticket claim` — Prendre en charge',
-        '`+ticket add <utilisateur>` — Ajouter un utilisateur',
-        '`+ticket remove <utilisateur>` — Retirer un utilisateur',
-        '`+ticket rename <nom>` — Renommer le ticket',
-        '`+ticket transcript` — Sauvegarder la transcription',
-        '`+ticket category <catégorie>` — Définir la catégorie',
-        '`+ticket supportrole <rôle>` — Ajouter un rôle support',
+        `\`${prefix}ticket enable\` — Activer les tickets`,
+        `\`${prefix}ticket disable\` — Désactiver les tickets`,
+        `\`${prefix}ticket panel [#salon]\` — Envoyer le panneau`,
+        `\`${prefix}ticket close [raison]\` — Fermer le ticket`,
+        `\`${prefix}ticket claim\` — Prendre en charge`,
+        `\`${prefix}ticket add <utilisateur>\` — Ajouter un utilisateur`,
+        `\`${prefix}ticket remove <utilisateur>\` — Retirer un utilisateur`,
+        `\`${prefix}ticket rename <nom>\` — Renommer le ticket`,
+        `\`${prefix}ticket transcript\` — Sauvegarder la transcription`,
+        `\`${prefix}ticket category <catégorie>\` — Définir la catégorie`,
+        `\`${prefix}ticket supportrole <rôle>\` — Ajouter un rôle support`,
     ].join('\n'));
     message.channel.send({ embeds: [embed] });
 }

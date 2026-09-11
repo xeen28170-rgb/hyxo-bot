@@ -8,7 +8,7 @@ module.exports = {
     name: 'unban',
     category: 'moderation',
     description: 'Débannir un utilisateur.',
-    usage: '+unban <ID> [raison]',
+    usage: '-unban <ID>',
     permissions: ['BanMembers'],
     botPermissions: ['BanMembers'],
     cooldown: 5,
@@ -18,7 +18,6 @@ module.exports = {
         }
 
         const userId = args[0];
-        const reason = args.slice(1).join(' ') || message.t('general.no_reason');
 
         const banEntry = await message.guild.bans.fetch(userId).catch(() => null);
         if (!banEntry) {
@@ -26,20 +25,20 @@ module.exports = {
         }
 
         LogDispatcher.markModerationAction(message.guild.id, 'unban', userId);
-        await message.guild.members.unban(userId, `${message.author.tag} | ${reason}`);
+        await message.guild.members.unban(userId, message.author.tag);
 
         const sanction = await ModerationService.createSanction({
             guildId: message.guild.id,
             userId,
             moderatorId: message.author.id,
             type: 'unban',
-            reason,
+            reason: 'Aucune raison fournie',
         });
 
         await ModerationService.sendModLog(client, message.guild, sanction, banEntry.user, message.author, message.guildSettings);
 
         message.channel.send({
-            embeds: [EmbedHelper.success(message.t('moderation.ban.unban_success', { user: banEntry.user.tag }) + `\n**Raison:** ${reason}`)],
+            embeds: [EmbedHelper.success(message.t('moderation.ban.unban_success', { user: banEntry.user.tag }))],
         });
     },
 };

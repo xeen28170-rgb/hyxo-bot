@@ -14,7 +14,7 @@ Copie `.env.example` vers `.env`, puis renseigne au minimum:
 TOKEN=votre_token_discord
 CLIENT_ID=votre_client_id
 OWNER_IDS=votre_id_discord
-PREFIX=+
+PREFIX=-
 DEFAULT_LANGUAGE=fr
 ```
 

@@ -6,7 +6,7 @@ module.exports = {
     name: 'stats',
     category: 'utility',
     description: 'Afficher les statistiques du bot.',
-    usage: '+stats',
+    usage: '-stats',
     cooldown: 5,
     async run(client, message) {
         const embed = new EmbedBuilder()

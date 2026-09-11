@@ -17,7 +17,8 @@ module.exports = {
             name = args[0];
         }
 
-        if (!url || !name) return message.channel.send({ embeds: [EmbedHelper.error(`Usage: \`${client.prefix}create <lien/émoji> <nom>\``)] });
+        const prefix = message.guildSettings?.prefix || client.prefix;
+        if (!url || !name) return message.channel.send({ embeds: [EmbedHelper.error(`Usage: \`${prefix}create <lien/émoji> <nom>\``)] });
 
         if (url.startsWith('<') && url.endsWith('>')) {
             const id = url.match(/\d{15,}/g);

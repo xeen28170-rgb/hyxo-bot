@@ -8,7 +8,7 @@ module.exports = {
     name: 'twitch',
     category: 'config',
     description: 'Régler des alertes Twitch.',
-    usage: '+twitch <add/del/list> [username] [#channel]',
+    usage: '-twitch <add/del/list> [username] [#channel]',
     permissions: ['ManageGuild'],
     async run(client, message, args) {
         const sub = args[0]?.toLowerCase();
@@ -17,7 +17,7 @@ module.exports = {
             const username = args[1]?.toLowerCase();
             const channel = Helpers.resolveChannel(message.guild, args[2]) || message.channel;
 
-            if (!username) return message.channel.send({ embeds: [EmbedHelper.error('❌ Usage: `+twitch add <username> [#channel]`')] });
+            if (!username) return message.channel.send({ embeds: [EmbedHelper.error('❌ Usage: `-twitch add <username> [#channel]`')] });
 
             try {
                 await TwitchAlert.findOneAndUpdate(
@@ -33,7 +33,7 @@ module.exports = {
 
         if (sub === 'del' || sub === 'remove' || sub === 'delete') {
             const username = args[1]?.toLowerCase();
-            if (!username) return message.channel.send({ embeds: [EmbedHelper.error('❌ Usage: `+twitch del <username>`')] });
+            if (!username) return message.channel.send({ embeds: [EmbedHelper.error('❌ Usage: `-twitch del <username>`')] });
 
             const deleted = await TwitchAlert.findOneAndDelete({ guildId: message.guild.id, streamerName: username });
             if (!deleted) return message.channel.send({ embeds: [EmbedHelper.error('❌ Aucune alerte trouvée pour ce streamer.')] });
@@ -49,6 +49,6 @@ module.exports = {
             return message.channel.send({ embeds: [EmbedHelper.info('🎥 Alertes Twitch', list)] });
         }
 
-        return message.channel.send({ embeds: [EmbedHelper.info('🎥 Twitch', 'Configurez vos alertes de stream ici.\n\n`+twitch add <username> [#salon]`\n`+twitch del <username>`\n`+twitch list`', { color: 0xFF0000 })] });
+        return message.channel.send({ embeds: [EmbedHelper.info('🎥 Twitch', 'Configurez vos alertes de stream ici.\n\n`-twitch add <username> [#salon]`\n`-twitch del <username>`\n`-twitch list`', { color: 0xFF0000 })] });
     },
 };

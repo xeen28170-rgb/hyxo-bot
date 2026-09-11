@@ -3,15 +3,23 @@
 const Blacklist = require('../../models/Blacklist');
 const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
+const PermissionsHelper = require('../../utils/permissions');
 
 module.exports = {
     name: 'bl',
     category: 'owners',
     ownerOnly: true,
-    description: 'Gérer la blacklist globale du bot',
-    usage: '<add/del/info/list> <@membre/ID> [raison]',
+    description: 'Gérer la blacklist globale du bot. Seul le propriétaire du bot peut retirer/unblacklist.',
+    usage: '<add/del/info/list/unbl> <@membre/ID> [raison]',
     async run(client, message, args) {
         const sub = args[0]?.toLowerCase();
+
+        // Seul le propriétaire absolu du bot peut retirer de la blacklist.
+        const isProprietaire = PermissionsHelper.isProprietaire(message.author.id);
+        const retire = ['unbl', 'del', 'remove', 'clear'].includes(sub);
+        if (retire && !isProprietaire) {
+            return message.channel.send({ embeds: [EmbedHelper.error('❌ Seul le **propriétaire du bot** peut retirer des utilisateurs de la blacklist.')] });
+        }
 
         if (sub === 'unbl') {
             const target = await Helpers.resolveUser(client, args[1]);

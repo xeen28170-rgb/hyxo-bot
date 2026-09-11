@@ -7,7 +7,7 @@ module.exports = {
     name: 'custom',
     category: 'custom',
     description: 'Gérer les commandes personnalisées.',
-    usage: '+custom <add|del|list> <nom> [réponse]',
+    usage: '-custom <add|del|list> <nom> [réponse]',
     permissions: ['ManageGuild'],
     cooldown: 5,
     async run(client, message, args) {
@@ -17,7 +17,8 @@ module.exports = {
             const name = args[1]?.toLowerCase();
             let response = args.slice(2).join(' ');
 
-            if (!name || !response) return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+custom add <nom> <réponse>`')] });
+            const prefix = message.guildSettings?.prefix || client.prefix;
+            if (!name || !response) return message.channel.send({ embeds: [EmbedHelper.error(`Usage: \`${prefix}custom add <nom> <réponse>\``)] });
             
             let isEmbed = false;
             if (response.startsWith('{') && response.endsWith('}')) {
@@ -51,7 +52,8 @@ module.exports = {
             return message.channel.send({ embeds: [embed] });
         }
 
-        return message.channel.send({ embeds: [EmbedHelper.info('✨ Custom — Aide', '`+custom add <nom> <réponse>`\n`+custom del <nom>`\n`+custom list`')] });
+        const prefix = message.guildSettings?.prefix || client.prefix;
+        return message.channel.send({ embeds: [EmbedHelper.info('✨ Custom — Aide', `\`${prefix}custom add <nom> <réponse>\`\n\`${prefix}custom del <nom>\`\n\`${prefix}custom list\``)] });
     },
 };
 

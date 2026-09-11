@@ -13,6 +13,9 @@ const ModelRegistry = require('./src/utils/modelRegistry');
 const Owner = require('./src/models/Owner');
 const Guild = require('./src/models/Guild');
 
+const fs = require('fs');
+const path = require('path');
+
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -48,7 +51,7 @@ const client = new Client({
         },
         users: {
             interval: 600,
-            filter: user => !user.bot,
+            filter: () => user => Boolean(user) && !user.bot,
         },
     },
     allowedMentions: {
@@ -81,7 +84,7 @@ client.botOwners = new Set(
 
 client.owners = new Set(client.botOwners);
 
-client.prefix = process.env.PREFIX || '+';
+client.prefix = process.env.PREFIX || '-';
 client.defaultLanguage = process.env.DEFAULT_LANGUAGE || 'fr';
 client.version = require('./package.json').version;
 client.startTime = Date.now();
@@ -106,6 +109,30 @@ function validateEnvironment() {
     return true;
 }
 
+// Nettoie les fichiers temporaires orphelins laissés par une écriture atomique
+// interrompue (process tué entre `writeFile` et `rename`). Leur nom suit le schéma
+// `.{basename}.{pid}.{timestamp}.{counter}.tmp` produit par jsonStore.
+function purgeOrphanTempFiles() {
+    const dataDir = path.join(process.cwd(), 'data');
+    let removed = 0;
+    try {
+        if (!fs.existsSync(dataDir)) return;
+        const entries = fs.readdirSync(dataDir);
+        for (const entry of entries) {
+            if (!entry.endsWith('.tmp')) continue;
+            try {
+                const file = path.join(dataDir, path.basename(entry));
+                fs.unlinkSync(file);
+                removed++;
+            } catch { /* fichier verrouillé ou déjà supprimé : on ignore */ }
+        }
+    } catch (err) {
+        Logger.error('[CONFIG] Erreur nettoyage des fichiers temporaires:', err.message);
+        return;
+    }
+    if (removed > 0) Logger.info(`[CONFIG] ${removed} fichier(s) temporaire(s) orphelin(s) nettoyé(s).`);
+}
+
 async function initialize() {
     // Ne pas effacer la console hors terminal interactif (ex: Pterodactyl/PM2),
     // sinon on perd des logs de démarrage utiles.
@@ -116,6 +143,10 @@ async function initialize() {
         if (!validateEnvironment()) {
             process.exit(1);
         }
+
+        // Nettoie les fichiers temporaires orphelins (écritures atomique interrompues)
+        // laissés dans le dossier data lors d'un arrêt brutal du process.
+        purgeOrphanTempFiles();
 
         Logger.info('Initialisation du cache...');
         await client.cache.init();

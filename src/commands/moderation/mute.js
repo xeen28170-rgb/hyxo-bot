@@ -15,7 +15,7 @@ module.exports = {
     name: 'mute',
     category: 'moderation',
     description: 'Mettre un membre en sourdine.',
-    usage: '+mute <utilisateur> [durée] [raison]',
+    usage: '-mute <utilisateur> [durée] [raison]',
     ...baseMute,
     async run(client, message, args) {
         if (!args[0]) return message.channel.send({ embeds: [EmbedHelper.error(`❌ Usage: \`${module.exports.usage}\``)] });
@@ -36,7 +36,8 @@ module.exports = {
 
         if (useTimeout) {
             if (!duration) {
-                return message.channel.send({ embeds: [EmbedHelper.error('❌ Le mode Timeout Discord nécessite une durée. Ex: `+mute @user 1h raison`')] });
+                const prefix = message.guildSettings?.prefix || client.prefix;
+                return message.channel.send({ embeds: [EmbedHelper.error(`❌ Le mode Timeout Discord nécessite une durée. Ex: \`${prefix}mute @user 1h raison\``)] });
             }
             if (duration > 28 * 24 * 60 * 60 * 1000) {
                 return message.channel.send({ embeds: [EmbedHelper.error('❌ La durée maximale pour un Timeout Discord est de **28 jours**.')] });

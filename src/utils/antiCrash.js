@@ -5,6 +5,20 @@ const Logger = require('./logger');
 
 const AntiCrash = {
     init(client) {
+        // Empêche une erreur EPIPE (pipe stdout/stderr cassé, ex: process manager
+        // redémarré) de remonter en uncaughtException. Sans ce handler, le
+        // uncaughtException ci-dessous tenterait de logger via winston Console,
+        // ce qui réécrirait sur le même stream cassé et redéclencherait EPIPE en
+        // boucle infinie (des Go de logs générés en quelques secondes).
+        process.stdout.on('error', (err) => {
+            if (err.code === 'EPIPE') return;
+            throw err;
+        });
+        process.stderr.on('error', (err) => {
+            if (err.code === 'EPIPE') return;
+            throw err;
+        });
+
         process.on('unhandledRejection', (reason, promise) => {
             Logger.error('Rejet de promesse non géré:', {
                 reason: reason?.message || reason,

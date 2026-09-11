@@ -53,7 +53,7 @@ module.exports = {
                 const created = await message.guild.emojis.create({
                     attachment: e.url,
                     name: e.name,
-                    reason: `Ajout via +emoji par ${message.author.tag}`,
+                    reason: `Ajout via emoji par ${message.author.tag}`,
                 });
                 added.push(`${created} (\`${created.name}\`)`);
             } catch (err) {

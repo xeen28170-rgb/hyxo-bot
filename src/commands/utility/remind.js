@@ -8,13 +8,16 @@ module.exports = {
     name: 'remind',
     category: 'utility',
     description: 'Se faire envoyer un rappel.',
-    usage: '+remind <temps> <message>',
+    usage: '-remind <temps> <message>',
     cooldown: 5,
     async run(client, message, args) {
         const timeStr = args[0];
         const msg = args.slice(1).join(' ');
 
-        if (!timeStr || !msg) return message.channel.send({ embeds: [EmbedHelper.error(`Usage: \`${this.usage}\``)] });
+        if (!timeStr || !msg) {
+            const prefix = message.guildSettings?.prefix || client.prefix;
+            return message.channel.send({ embeds: [EmbedHelper.error(`Usage: \`${prefix}remind <temps> <message>\``)] });
+        }
 
         const duration = Helpers.parseDuration(timeStr);
         if (!duration) return message.channel.send({ embeds: [EmbedHelper.error(message.t('general.invalid_duration'))] });

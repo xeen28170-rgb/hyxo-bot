@@ -8,7 +8,7 @@ module.exports = {
     category: 'tickets',
     helpCategory: 'tickets',
     description: 'Ferme le ticket actuel.',
-    usage: '+close',
+    usage: '-close',
     cooldown: 5,
     async run(client, message) {
         return TicketService.closeTicketFromMessage(client, message);

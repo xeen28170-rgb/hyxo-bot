@@ -8,16 +8,16 @@ module.exports = {
     aliases: ['advanced-config'],
     category: 'config',
     description: 'Affiche les options de configuration avancee disponibles.',
-    usage: '+advancedconfig',
+    usage: '-advancedconfig',
     permissions: ['ManageGuild'],
     async run(client, message) {
         const settings = message.guildSettings || await getGuildSettings(client, message.guild.id, { create: false });
         const ad = settings?.autodelete;
 
         const lines = [
-            '`+config` - Configuration générale',
-            '`+secur` - Panneau antiraid interactif',
-            '`+settings` - État de la configuration du serveur',
+            '`-config` - Configuration générale',
+            '`-secur` - Panneau antiraid interactif',
+            '`-settings` - État de la configuration du serveur',
             '',
             '**Autodelete:**',
             ad?.moderation ? `  • Modération: \`${ad.moderation.target}\`${ad.moderation.duration ? ` (${ad.moderation.duration})` : ''}` : '  • Modération: ❌ désactivé',

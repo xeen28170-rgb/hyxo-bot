@@ -18,13 +18,14 @@ module.exports = {
         const validSubs = ['invite', 'leave', 'discussion'];
 
         if (!sub || !validSubs.includes(sub) || !targetId) {
+            const prefix = message.guildSettings?.prefix || client.prefix;
             return message.channel.send({
                 embeds: [EmbedHelper.info(
                     '📋 server-action — Aide',
                     [
-                        '`+server-action invite <ID>` — Génère une invitation permanente vers ce serveur',
-                        '`+server-action leave <ID>` — Fait quitter le bot du serveur',
-                        '`+server-action discussion <ID>` — Relaie tes messages dans un salon du serveur',
+                        `\`${prefix}server-action invite <ID>\` — Génère une invitation permanente vers ce serveur`,
+                        `\`${prefix}server-action leave <ID>\` — Fait quitter le bot du serveur`,
+                        `\`${prefix}server-action discussion <ID>\` — Relaie tes messages dans un salon du serveur`,
                     ].join('\n'),
                     { color: 0xFF0000 }
                 )],
@@ -95,7 +96,7 @@ module.exports = {
                     return;
                 }
                 try {
-                    await channel.send(`**[Bot Owner]** ${m.content}`);
+                    await channel.send({ content: `**[Bot Owner]** ${m.content}`, allowedMentions: { parse: [] } });
                     await m.react('✅').catch(() => {});
                 } catch {
                     await m.react('❌').catch(() => {});

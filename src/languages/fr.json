@@ -33,7 +33,7 @@
       "success": "🔇 **{user}** a été mis en sourdine.\n**Raison:** {reason}",
       "temp_success": "🔇 **{user}** a été mis en sourdine pour **{duration}**.\n**Raison:** {reason}",
       "already_muted": "❌ Cet utilisateur est déjà en sourdine.",
-      "no_mute_role": "❌ Aucun rôle de mute configuré. Utilisez `+config muterole <rôle>`.",
+      "no_mute_role": "❌ Aucun rôle de mute configuré. Utilisez `-config muterole <rôle>`.",
       "unmute_success": "🔊 **{user}** n'est plus en sourdine.\n**Raison:** {reason}",
       "not_muted": "❌ Cet utilisateur n'est pas en sourdine.",
       "expired": "🔊 La mise en sourdine de **{user}** a expiré."

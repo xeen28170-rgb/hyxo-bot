@@ -13,7 +13,7 @@ module.exports = {
     async run(client, message, args) {
         const sub = args[0]?.toLowerCase();
         if (!sub || !['allow', 'deny', 'reset'].includes(sub))
-            return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+spam <allow/deny/reset> [salon]`')] });
+            return message.channel.send({ embeds: [EmbedHelper.error('Usage: `-spam <allow/deny/reset> [salon]`')] });
 
         const channel = (args[1] && Helpers.resolveChannel(message.guild, args[1])) || message.channel;
 

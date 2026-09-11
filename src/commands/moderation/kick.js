@@ -5,12 +5,13 @@ const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
 const LogDispatcher = require('../../utils/logDispatcher');
 const PermissionsHelper = require('../../utils/permissions');
+const Logger = require('../../utils/logger');
 
 module.exports = {
     name: 'kick',
     category: 'moderation',
     description: 'Expulser un membre du serveur.',
-    usage: '+kick <utilisateur> [raison]',
+    usage: '-kick <utilisateur> [raison]',
     permissions: ['KickMembers'],
     botPermissions: ['KickMembers'],
     cooldown: 5,
@@ -50,7 +51,7 @@ module.exports = {
 
             message.channel.send({ embeds: [embed] });
         } catch (err) {
-            console.error(err);
+            Logger.error('Erreur lors de l\'expulsion:', err);
             message.channel.send({ embeds: [EmbedHelper.error(`Erreur lors de l'expulsion : ${err.message}`)] });
         }
     },

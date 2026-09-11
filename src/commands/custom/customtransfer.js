@@ -12,7 +12,8 @@ module.exports = {
     permissions: ['ManageGuild'],
     async run(client, message, args) {
         const sourceId = args[0];
-        if (!sourceId) return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+custom transfer <ID du serveur source>`')] });
+        const prefix = message.guildSettings?.prefix || client.prefix;
+        if (!sourceId) return message.channel.send({ embeds: [EmbedHelper.error(`Usage: \`${prefix}custom transfer <ID du serveur source>\``)] });
 
         const sourceGuild = client.guilds.cache.get(sourceId);
         if (!sourceGuild) return message.channel.send({ embeds: [EmbedHelper.error('Serveur introuvable ou le bot n\'y est pas présent.')] });

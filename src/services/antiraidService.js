@@ -3,9 +3,12 @@
 const { AuditLogEvent, PermissionFlagsBits } = require('discord.js');
 const AntiraidLog = require('../models/AntiraidLog');
 const SecurityLog = require('../models/SecurityLog');
+const Guild = require('../models/Guild');
 const Logger = require('../utils/logger');
 const EmbedHelper = require('../utils/embedBuilder');
 const LogDispatcher = require('../utils/logDispatcher');
+const PermissionsHelper = require('../utils/permissions');
+const { isWhitelisted } = require('../utils/whitelist');
 
 const ACTION_TO_MODULE = {
     [AuditLogEvent.ChannelCreate]:     { module: 'antichannel', group: 'channel' },
@@ -82,8 +85,132 @@ const THRESHOLD_ALIASES = {
 };
 
 const massJoinCache = new Map(); // guildId → { joins: [timestamps], alerted: bool }
+const recentVanityBans = new Map(); // guildId:executorId → timestamp (anti double-ban)
 
 const AntiraidService = {
+
+    /**
+     * Protection Anti-Down URL serveur (vanity).
+     * - Détecte le changement de l'URL vanity du serveur.
+     * - Seuls les owners du bot bypassent.
+     * - La whitelist, les owners serveur, l'owner du serveur : PAS de bypass -> ban automatique.
+     */
+    async handleGuildUpdate(client, guild, auditLog, settings) {
+        const antidown = settings?.antidown;
+        if (!antidown?.enabled) return;
+
+        // Déduplication : éviter de traiter deux fois le même changement d'URL
+        // (l'événement temps réel ET le fallback guildUpdate peuvent se déclencher).
+        if (auditLog?.id) {
+            if (processedAuditLogs.has(auditLog.id)) return;
+            processedAuditLogs.set(auditLog.id, Date.now());
+        }
+
+        // Identifier un changement de vanity url dans l'audit log
+        const changes = auditLog?.changes || [];
+        const vanityChange = changes.find(c => c?.key === 'vanity_url_code');
+        if (!vanityChange) return;
+
+        const executorId = auditLog.executorId;
+        if (!executorId) return;
+        if (executorId === client.user?.id) return;
+
+        const newVanity = vanityChange.new;
+        const oldVanity = vanityChange.old;
+
+        // Seul un owner du bot bypass — ni whitelist, ni owner serveur, ni couronne
+        const isBotOwner = PermissionsHelper.isBotOwner(client, executorId);
+        if (isBotOwner) {
+            // L'owner bot a le droit de changer, on mémorise la nouvelle valeur comme référence verrouillée
+            await Guild.updateOne({ guildId: guild.id }, { 'antidown.vanity': newVanity || null });
+            await this.logDecision(client, guild, settings, {
+                level: 'bypass',
+                moduleKey: 'antidown',
+                group: 'vanity',
+                executorId,
+                action: 'guildUpdate.vanity_url_code',
+                reason: 'owner bot',
+            });
+            return;
+        }
+
+        Logger.warn(`[ANTIDOWN] ${guild.name}: tentative de changement d'URL vanity par ${executorId} (${newVanity || 'suppression'})`);
+        await this.logDecision(client, guild, settings, {
+            level: 'detect',
+            moduleKey: 'antidown',
+            group: 'vanity',
+            executorId,
+            action: 'guildUpdate.vanity_url_code',
+            reason: 'modification URL serveur non autorisée',
+            punishment: 'ban',
+        });
+
+        // Restaurer l'ancienne URL directement, quoi qu'il arrive.
+        // Référence = la valeur verrouillée (antidown.vanity), sinon l'ancienne valeur de l'audit log.
+        const lockedUrl = antidown.vanity || oldVanity;
+        if (lockedUrl && lockedUrl !== newVanity) {
+            const locked = await guild.setVanityCode(lockedUrl, '[ANTIDOWN] Restauration URL serveur').catch(() => null);
+            if (locked && locked !== newVanity) {
+                Logger.warn(`[ANTIDOWN] ${guild.name}: URL restaurée vers discord.gg/${lockedUrl}`);
+            } else {
+                Logger.warn(`[ANTIDOWN] ${guild.name}: restauration URL impossible (perms ou vanity indisponible)`);
+            }
+        } else if (!lockedUrl) {
+            Logger.warn(`[ANTIDOWN] ${guild.name}: aucune URL de référence verrouillée, enregistrement de la précédente`);
+            await Guild.updateOne({ guildId: guild.id }, { 'antidown.vanity': oldVanity || null });
+        }
+
+        // Ban automatique (whitelist incluse ne bypass PAS)
+        await this.hardBan(client, guild, settings, executorId, '[ANTIDOWN] Changement URL serveur non autorisé');
+    },
+
+    async hardBan(client, guild, settings, executorId, reason) {
+        const botMember = guild.members.me;
+        if (!botMember?.permissions.has(PermissionFlagsBits.BanMembers)) return;
+
+        // Anti double-ban vanity : un même exécuteur n'est traité qu'une fois par
+        // courte fenêtre (l'événement audit et le fallback guildUpdate peuvent se déclencher).
+        const dedupKey = `${guild.id}:${executorId}`;
+        const lastBan = recentVanityBans.get(dedupKey);
+        if (lastBan && Date.now() - lastBan < 10_000) return;
+        recentVanityBans.set(dedupKey, Date.now());
+
+        const member = await guild.members.fetch(executorId).catch(() => null);
+        if (member && !member.bannable) {
+            Logger.warn(`[ANTIDOWN] Impossible de bannir ${executorId} (hiérarchie)`);
+            return;
+        }
+
+        LogDispatcher.markModerationAction(guild.id, 'ban', executorId);
+        await guild.members.ban(executorId, { reason, deleteMessageSeconds: 0 });
+
+        await AntiraidLog.create({
+            guildId: guild.id,
+            executorId,
+            executorTag: member?.user?.tag || executorId,
+            action: 'vanity',
+            punishment: 'ban',
+            count: 1,
+            details: { moduleKey: 'antidown', group: 'vanity' },
+        });
+
+        await SecurityLog.create({
+            type: 'antidown',
+            module: 'antidown',
+            action: 'vanity',
+            guildId: guild.id,
+            userId: executorId,
+            userTag: member?.user?.tag || executorId,
+            reason,
+            punishment: 'ban',
+            count: 1,
+            details: { moduleKey: 'antidown' },
+        });
+
+        await this.notifyRaid(client, guild, settings, member?.user || { id: executorId, tag: executorId }, 'vanity', 1, 'ban', {
+            detail: reason,
+        });
+    },
 
     async handleAuditLog(client, guild, auditLog, settings) {
         if (!auditLog?.id || processedAuditLogs.has(auditLog.id)) return;
@@ -102,7 +229,7 @@ const AntiraidService = {
         if (!executorId) return;
         if (executorId === client.user?.id) return;
 
-        const trust = this.getTrustReason(client, guild, settings, executorId);
+        const trust = await this.getTrustReason(client, guild, settings, executorId);
         if (trust) {
             await this.logDecision(client, guild, settings, {
                 level: 'bypass',
@@ -191,7 +318,7 @@ const AntiraidService = {
 
         const guild = message.guild;
         const executorId = message.author.id;
-        const trust = this.getTrustReason(client, guild, settings, executorId);
+        const trust = await this.getTrustReason(client, guild, settings, executorId, message.member);
         if (trust) {
             await this.logDecision(client, guild, settings, {
                 level: 'bypass',
@@ -241,6 +368,9 @@ const AntiraidService = {
         if (ar.creationLimit) {
             const limitMs = this.parseDuration(ar.creationLimit);
             if (limitMs && now - member.user.createdTimestamp < limitMs) {
+                // Ne jamais pénaliser un membre de confiance (crown/owner/whitelist/owners du bot).
+                const trust = await this.getTrustReason(client, guild, settings, member.id, member);
+                if (trust) return;
                 Logger.warn(`[ANTIRAID][CREATION] Compte trop récent: ${member.user.tag} (${guild.name})`);
                 try {
                     LogDispatcher.markModerationAction(guild.id, 'kick', member.id);
@@ -262,7 +392,7 @@ const AntiraidService = {
                     const entry = logs?.entries.find(e =>
                         e.targetId === member.id && Date.now() - e.createdTimestamp < 10_000
                     );
-                    const trust = entry ? this.getTrustReason(client, guild, settings, entry.executorId) : null;
+                    const trust = entry ? await this.getTrustReason(client, guild, settings, entry.executorId) : null;
                     if (trust) {
                         await this.logDecision(client, guild, settings, {
                             level: 'bypass',
@@ -487,6 +617,7 @@ const AntiraidService = {
             mass_join:     '🌊 Mass-join détecté',
             account_too_new: '🆕 Compte trop récent',
             lockdown:      '🔒 Lockdown activé',
+            vanity:        '🌐 Changement URL serveur (anti-down)',
         };
 
         const fields = [
@@ -520,17 +651,28 @@ const AntiraidService = {
         }
     },
 
-    getTrustReason(client, guild, settings, executorId) {
+    async getTrustReason(client, guild, settings, executorId, member) {
         if (!executorId) return 'executor inconnu';
         if (executorId === client.user?.id) return 'bot lui-même';
+        if (executorId === guild.ownerId) return 'crown owner';
         if (client.botOwners?.has(executorId) || client.owners?.has(executorId)) return 'owner bot';
         if (settings?.owners?.includes(executorId)) return 'owner bot serveur';
-        if (settings?.antiraid?.whitelist?.includes(executorId)) return 'whitelist';
-        return null;
+
+        const wl = settings?.antiraid?.whitelist || [];
+        if (wl.length === 0) return null;
+        if (!member && typeof guild.members?.fetch === 'function') {
+            try {
+                member = await guild.members.fetch(executorId);
+            } catch {
+                member = null;
+            }
+        }
+        const trusted = await isWhitelisted(member, executorId, wl);
+        return trusted ? 'whitelist' : null;
     },
 
-    isTrustedExecutor(client, guild, settings, executorId) {
-        return Boolean(this.getTrustReason(client, guild, settings, executorId));
+    async isTrustedExecutor(client, guild, settings, executorId, member) {
+        return Boolean(await this.getTrustReason(client, guild, settings, executorId, member));
     },
 
     isDangerousRole(role) {
@@ -622,12 +764,14 @@ const AntiraidService = {
 
     cleanupCache(client) {
         const now = Date.now();
-        for (const [key, tracker] of client.antiRaidCache) {
-            const fresh = tracker.times?.filter(t => now - t < DEFAULT_WINDOW_MS * 2);
-            if (!fresh || fresh.length === 0) {
-                client.antiRaidCache.delete(key);
-            } else {
-                tracker.times = fresh;
+        if (client?.antiRaidCache) {
+            for (const [key, tracker] of client.antiRaidCache) {
+                const fresh = tracker.times?.filter(t => now - t < DEFAULT_WINDOW_MS * 2);
+                if (!fresh || fresh.length === 0) {
+                    client.antiRaidCache.delete(key);
+                } else {
+                    tracker.times = fresh;
+                }
             }
         }
         for (const [auditId, timestamp] of processedAuditLogs) {
@@ -639,15 +783,26 @@ const AntiraidService = {
                 massJoinCache.delete(guildId);
             }
         }
+        for (const [key, timestamp] of recentVanityBans) {
+            if (now - timestamp > 60_000) recentVanityBans.delete(key);
+        }
+    },
+
+    /**
+     * Purge les caches du module (audit logs traités, mass-join) sans client.
+     * Utile pour un balayage périodique autonome.
+     */
+    cleanupModuleCache() {
+        this.cleanupCache(null);
     },
 };
 
-setInterval(() => {
-    const now = Date.now();
-    for (const [guildId, entry] of massJoinCache) {
-        entry.joins = entry.joins.filter(t => now - t < 300_000);
-        if (entry.joins.length === 0 && !entry.lockdown) massJoinCache.delete(guildId);
-    }
+// Balayage périodique : purge les caches du module (audit logs déjà traités, mass-join)
+// pour éviter une fuite mémoire. `cleanupCache(client)` — qui purge aussi l'antiRaidCache
+// du client — est appelé depuis ready.js qui dispose de la référence au client.
+const cleanupTimer = setInterval(() => {
+    AntiraidService.cleanupModuleCache();
 }, 5 * 60_000);
+if (cleanupTimer.unref) cleanupTimer.unref();
 
 module.exports = AntiraidService;

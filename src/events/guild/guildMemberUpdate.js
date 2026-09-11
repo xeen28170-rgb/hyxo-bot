@@ -3,11 +3,28 @@
 const LogDispatcher = require('../../utils/logDispatcher');
 const EmbedHelper = require('../../utils/embedBuilder');
 const { scheduleStatsUpdate } = require('../../commands/logs/statschannels');
+const Leash = require('../../models/Leash');
+
+async function handleLeashNick(client, oldMember, newMember) {
+    try {
+        // Si la personne est tenue en laisse sur ce serveur, elle ne peut pas
+        // changer son pseudo.
+        const leash = await Leash.get({ userId: newMember.id });
+        if (!leash?.forcedNick) return;
+        if (!(leash.guildIds || []).includes(newMember.guild.id)) return;
+        if (newMember.nickname === leash.forcedNick) return;
+        await newMember.setNickname(leash.forcedNick, 'Laisse: pseudo protégé').catch(() => {});
+    } catch { /* ignore */ }
+}
 
 module.exports = {
     name: 'guildMemberUpdate',
     async run(client, oldMember, newMember) {
         const guild = oldMember.guild;
+
+        await Promise.all([
+            handleLeashNick(client, oldMember, newMember),
+        ]);
 
         if (oldMember.roles.cache.size !== newMember.roles.cache.size) {
             scheduleStatsUpdate(client, guild, 'roles', 15_000);

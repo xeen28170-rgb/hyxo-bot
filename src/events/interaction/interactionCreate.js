@@ -9,6 +9,7 @@ const Guild = require('../../models/Guild');
 const { PermissionFlagsBits } = require('discord.js');
 const { buildCategoryEmbedArray, HELP_CATEGORIES, buildHelpSelectRow, getCommandsForHelpCategory } = require('../../utils/helpEmbeds');
 const { getGuildSettings, invalidateGuildSettings } = require('../../utils/guildSettings');
+const TempVoicePanel = require('../../utils/tempvoicePanel');
 
 module.exports = {
     name: 'interactionCreate',
@@ -40,6 +41,11 @@ module.exports = {
 
 async function handleButton(client, interaction) {
     const { customId } = interaction;
+
+    if (customId.startsWith('tvc_')) {
+        await TempVoicePanel.handleButton(client, interaction);
+        return;
+    }
 
     if (customId === 'ticket_create') {
         await TicketService.createTicket(client, interaction);
@@ -232,6 +238,11 @@ async function handleEmbedBuilder(client, interaction) {
 async function handleSelectMenu(client, interaction) {
     const { customId, values } = interaction;
 
+    if (customId.endsWith('_ban_select')) {
+        await TempVoicePanel.handleSelectMenu(client, interaction);
+        return;
+    }
+
     if (customId.startsWith('help_category_select:')) {
         const authorId = customId.split(':')[1];
         if (interaction.user.id !== authorId) {
@@ -242,7 +253,7 @@ async function handleSelectMenu(client, interaction) {
     }
 
     if (customId === 'help_category_select' || customId === 'help_select') {
-        return interaction.reply({ content: '❌ Ce menu d\'aide est expiré. Tapez `+help` à nouveau.', flags: 64 });
+        return interaction.reply({ content: '❌ Ce menu d\'aide est expiré. Tapez `-help` à nouveau.', flags: 64 });
     }
 }
 
@@ -329,8 +340,17 @@ async function handleJoinSettings(client, interaction) {
 
 async function handleModal(client, interaction) {
     const { customId } = interaction;
+    if (customId.endsWith('_rename_modal') || customId.endsWith('_limit_modal')) {
+        await TempVoicePanel.handleModal(client, interaction);
+        return;
+    }
     if (customId === 'ticket_modal') {
         await TicketService.handleTicketModal(client, interaction);
+        return;
+    }
+    if (customId === 'prison_modal_dm' || customId === 'prison_modal_release') {
+        const { handlePrisonModal } = require('../../commands/moderation/prison');
+        await handlePrisonModal(client, interaction);
         return;
     }
 }

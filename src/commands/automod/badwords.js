@@ -13,7 +13,7 @@ module.exports = {
     async run(client, message, args) {
         const sub = args[0]?.toLowerCase();
         if (!sub)
-            return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+badwords <on/off|add|del|list|clear>`')] });
+            return message.channel.send({ embeds: [EmbedHelper.error('Usage: `-badwords <on/off|add|del|list|clear>`')] });
 
         if (sub === 'on' || sub === 'off') {
             const enabled = sub === 'on';
@@ -50,6 +50,6 @@ module.exports = {
             return message.channel.send({ embeds: [EmbedHelper.success('Tous les mots interdits ont été supprimés.')] });
         }
 
-        message.channel.send({ embeds: [EmbedHelper.error('Usage: `+badwords <on/off|add|del|list|clear>`')] });
+        message.channel.send({ embeds: [EmbedHelper.error('Usage: `-badwords <on/off|add|del|list|clear>`')] });
     },
 };

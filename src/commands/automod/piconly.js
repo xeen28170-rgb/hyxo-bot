@@ -14,7 +14,7 @@ module.exports = {
     async run(client, message, args) {
         const sub = args[0]?.toLowerCase();
         if (!sub || !['add', 'del', 'list'].includes(sub))
-            return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+piconly <add/del/list> [salon]`')] });
+            return message.channel.send({ embeds: [EmbedHelper.error('Usage: `-piconly <add/del/list> [salon]`')] });
 
         if (sub === 'list') {
             const settings = message.guildSettings || await getGuildSettings(client, message.guild.id);

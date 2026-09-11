@@ -47,10 +47,10 @@ module.exports = {
             `Membres listés: **${ar.blrankList.length}**`,
             '',
             '**Usage:**',
-            '`+blrank on/off/max`',
-            '`+blrank danger/all`',
-            '`+blrank add @membre`',
-            '`+blrank del @membre`'
+            '`-blrank on/off/max`',
+            '`-blrank danger/all`',
+            '`-blrank add @membre`',
+            '`-blrank del @membre`'
         ].join('\n'), { color: 0xFF0000 });
 
         return message.channel.send({ embeds: [embed] });

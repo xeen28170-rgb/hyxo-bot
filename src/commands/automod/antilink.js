@@ -8,7 +8,7 @@ module.exports = {
     name: 'antilink',
     category: 'automod',
     description: 'Configure AntiLink et AntiInvite Discord',
-    usage: '+antilink <on/off|invite on/off|all|wl>',
+    usage: '-antilink <on/off|invite on/off|all|wl>',
     permissions: ['ManageGuild'],
     async run(client, message, args) {
         const sub = args[0]?.toLowerCase();
@@ -32,7 +32,7 @@ module.exports = {
                 return message.channel.send({ embeds: [EmbedHelper.success('L\'antilink s\'activera pour **les invitations Discord uniquement**.')] });
             }
             if (!['on', 'off'].includes(status)) {
-                return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+antilink invite <on/off>`')] });
+                return message.channel.send({ embeds: [EmbedHelper.error('Usage: `-antilink invite <on/off>`')] });
             }
             const enabled = status === 'on';
             await Guild.updateOne({ guildId: message.guild.id }, {
@@ -51,7 +51,7 @@ module.exports = {
 
         if (sub === 'wl' || sub === 'whitelist') {
             const url = args[1];
-            if (!url) return message.channel.send({ embeds: [EmbedHelper.error('❌ Précise une URL à whitelister. Ex: `+antilink wl youtube.com`')] });
+            if (!url) return message.channel.send({ embeds: [EmbedHelper.error('❌ Précise une URL à whitelister. Ex: `-antilink wl youtube.com`')] });
             await Guild.updateOne({ guildId: message.guild.id }, { $addToSet: { 'automod.antilink.whitelist': url } });
             client.cache.invalidateGuild(message.guild.id);
             return message.channel.send({ embeds: [EmbedHelper.success(`**${url}** ajouté à la whitelist de l'antilink.`)] });
@@ -73,11 +73,11 @@ async function sendStatus(client, message, providedSettings = null) {
         `**Whitelist invites:** ${invite?.whitelist?.length ? invite.whitelist.join(', ') : 'Aucune'}`,
         '',
         '**Commandes:**',
-        '`+antilink on/off` — activer/désactiver',
-        '`+antilink invite` — bloque les invitations uniquement',
-        '`+antilink invite on/off` — anti-invitations Discord séparé',
-        '`+antilink all` — bloque tous les liens',
-        '`+antilink wl <url>` — ajouter à la whitelist',
+        '`-antilink on/off` — activer/désactiver',
+        '`-antilink invite` — bloque les invitations uniquement',
+        '`-antilink invite on/off` — anti-invitations Discord séparé',
+        '`-antilink all` — bloque tous les liens',
+        '`-antilink wl <url>` — ajouter à la whitelist',
     ].join('\n'), { color: 0xFF0000 });
     return message.channel.send({ embeds: [embed] });
 }

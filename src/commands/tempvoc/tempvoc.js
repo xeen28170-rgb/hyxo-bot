@@ -19,7 +19,7 @@ module.exports = {
     name: 'tempvoc',
     category: 'tempvoc',
     description: 'Ouvre le panneau TempVoc.',
-    usage: '+tempvoc',
+    usage: '-tempvoc',
     cooldown: 5,
     async run(client, message, args) {
         const sub = args[0]?.toLowerCase();
@@ -108,8 +108,8 @@ module.exports = {
                 if (!member) return message.channel.send({ embeds: [EmbedHelper.error(message.t('general.invalid_user'))] });
                 if (member.id === message.author.id) return message.channel.send({ embeds: [EmbedHelper.error('❌ Vous êtes déjà propriétaire.')] });
 
-                await channel.permissionOverwrites.edit(message.author.id, { ManageChannels: null });
-                await channel.permissionOverwrites.edit(member.id, { ManageChannels: true, MoveMembers: true });
+                await channel.permissionOverwrites.edit(message.author.id, { ManageChannels: null, Connect: null, ViewChannel: null });
+                await channel.permissionOverwrites.edit(member.id, { ManageChannels: true, MoveMembers: true, Connect: true, ViewChannel: true });
                 await TempVoice.updateOne({ _id: tempVoc._id }, { ownerId: member.id });
                 return message.channel.send({ embeds: [EmbedHelper.success(message.t('tempvoc.transferred', { user: member.user.tag }))] });
             }
@@ -395,18 +395,19 @@ async function handleSetup(client, message, sub, args) {
 }
 
 function sendHelp(message) {
+    const prefix = message.guildSettings?.prefix || client.prefix;
     message.channel.send({ embeds: [EmbedHelper.info('🎤 TempVoc — Aide', [
-        '`+tempvoc rename <nom>` — Renommer',
-        '`+tempvoc lock/unlock` — Verrouiller/Déverrouiller',
-        '`+tempvoc limit <0-99>` — Limite d\'utilisateurs',
-        '`+tempvoc hide/show` — Masquer/Afficher',
-        '`+tempvoc permit <utilisateur>` — Autoriser',
-        '`+tempvoc deny <utilisateur>` — Refuser',
-        '`+tempvoc transfer <utilisateur>` — Transférer',
-        '`+tempvoc delete` — Supprimer',
+        `\`${prefix}tempvoc rename <nom>\` — Renommer`,
+        `\`${prefix}tempvoc lock/unlock\` — Verrouiller/Déverrouiller`,
+        `\`${prefix}tempvoc limit <0-99>\` — Limite d'utilisateurs`,
+        `\`${prefix}tempvoc hide/show\` — Masquer/Afficher`,
+        `\`${prefix}tempvoc permit <utilisateur>\` — Autoriser`,
+        `\`${prefix}tempvoc deny <utilisateur>\` — Refuser`,
+        `\`${prefix}tempvoc transfer <utilisateur>\` — Transférer`,
+        `\`${prefix}tempvoc delete\` — Supprimer`,
         '',
         '**Config (Admin)**',
-        '`+tempvoc setup channel <salon vocal>` — Configurer',
-        '`+tempvoc setup category <catégorie>` — Catégorie',
+        `\`${prefix}tempvoc setup channel <salon vocal>\` — Configurer`,
+        `\`${prefix}tempvoc setup category <catégorie>\` — Catégorie`,
     ].join('\n'), { color: 0x9B59B6 })] });
 }

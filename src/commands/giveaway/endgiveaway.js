@@ -13,7 +13,8 @@ module.exports = {
     permissions: ['ManageMessages'],
     async run(client, message, args) {
         const msgId = args[0];
-        if (!msgId) return message.channel.send({ embeds: [EmbedHelper.error('Usage: `+end giveaway <ID du message>`')] });
+        const prefix = message.guildSettings?.prefix || client.prefix;
+        if (!msgId) return message.channel.send({ embeds: [EmbedHelper.error(`Usage: \`${prefix}end giveaway <ID du message>\``)] });
 
         const giveaway = await Giveaway.findOne({ messageId: msgId, guildId: message.guild.id });
         if (!giveaway) return message.channel.send({ embeds: [EmbedHelper.error('Giveaway introuvable avec cet ID.')] });

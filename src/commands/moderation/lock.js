@@ -7,7 +7,7 @@ module.exports = {
     name: 'lock',
     category: 'moderation',
     description: 'Verrouiller un salon.',
-    usage: '+lock [salon]',
+    usage: '-lock [salon]',
     permissions: ['ManageChannels'],
     botPermissions: ['ManageChannels'],
     cooldown: 5,

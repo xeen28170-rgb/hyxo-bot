@@ -27,6 +27,7 @@ module.exports = {
             return message.channel.send({ embeds: [EmbedHelper.success('L\'ensemble des paramètres du bot a été réinitialisé.')] });
         }
 
-        message.channel.send({ embeds: [EmbedHelper.info('⚠️ Réinitialisation', '`+reset server` — Réinitialise ce serveur\n`+reset all` — Réinitialise TOUT', { color: 0xFF0000 })] });
+        const prefix = message.guildSettings?.prefix || client.prefix;
+        message.channel.send({ embeds: [EmbedHelper.info('⚠️ Réinitialisation', `\`${prefix}reset server\` — Réinitialise ce serveur\n\`${prefix}reset all\` — Réinitialise TOUT`, { color: 0xFF0000 })] });
     },
 };

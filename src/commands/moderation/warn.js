@@ -4,12 +4,13 @@ const ModerationService = require('../../services/moderationService');
 const Sanction = require('../../models/Sanction');
 const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
+const Logger = require('../../utils/logger');
 
 module.exports = {
     name: 'warn',
     category: 'moderation',
     description: 'Avertir un membre.',
-    usage: '+warn <utilisateur> [raison]',
+    usage: '-warn <utilisateur> [raison]',
     permissions: ['KickMembers'],
     cooldown: 3,
     async run(client, message, args) {
@@ -52,7 +53,7 @@ module.exports = {
 
             message.channel.send({ embeds: [embed] });
         } catch (err) {
-            console.error(err);
+            Logger.error('Erreur lors de l\'avertissement:', err);
             message.channel.send({ embeds: [EmbedHelper.error(`Une erreur est survenue : ${err.message}`)] });
         }
     },

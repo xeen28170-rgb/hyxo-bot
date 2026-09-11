@@ -8,7 +8,7 @@ module.exports = {
     name: 'warns',
     category: 'moderation',
     description: 'Voir les avertissements d\'un membre.',
-    usage: '+warns [utilisateur]',
+    usage: '-warns [utilisateur]',
     permissions: ['KickMembers'],
     cooldown: 5,
     async run(client, message, args) {
