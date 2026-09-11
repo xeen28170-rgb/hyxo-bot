@@ -7,6 +7,7 @@ const {
 const Ticket = require('../models/Ticket');
 const LogDispatcher = require('../utils/logDispatcher');
 const { getGuildSettings } = require('../utils/guildSettings');
+const { getEmoji } = require('../config/emojis');
 
 // Chargement PARESSEUX de discord-html-transcripts.
 // La v3 tire un bundle de web-components navigateur (@derockdev/discord-components-core)
@@ -52,7 +53,7 @@ const TicketService = {
     async sendPanel(channel, settings) {
         const embed = new EmbedBuilder()
             .setColor(parseInt((settings.tickets?.embed?.color || '#5865F2').replace('#', ''), 16))
-            .setTitle(settings.tickets?.embed?.title || '🎫 Support Tickets')
+            .setTitle(settings.tickets?.embed?.title || `${getEmoji('TICKET')} Support Tickets`)
             .setDescription(settings.tickets?.embed?.description || 'Cliquez sur le bouton ci-dessous pour ouvrir un ticket de support.')
             .setTimestamp();
 
@@ -75,20 +76,20 @@ const TicketService = {
 
         const settings = await getGuildSettings(client, guild.id, { create: false });
         if (!settings?.tickets?.enabled) {
-            return interaction.editReply({ content: '❌ Le système de tickets est désactivé.' });
+            return interaction.editReply({ content: `${getEmoji('ERROR')} Le système de tickets est désactivé.` });
         }
 
         const activeStatus = { $ne: 'closed' };
         const existingTicket = await Ticket.findOne({ guildId: guild.id, userId: user.id, status: activeStatus });
         if (existingTicket) {
             return interaction.editReply({
-                content: `❌ Vous avez déjà un ticket ouvert: <#${existingTicket.channelId}>`,
+                content: `${getEmoji('ERROR')} Vous avez déjà un ticket ouvert: <#${existingTicket.channelId}>`,
             });
         }
 
         const openCount = await Ticket.countDocuments({ guildId: guild.id, userId: user.id, status: activeStatus });
         if (openCount >= (settings.tickets.maxTickets || 1)) {
-            return interaction.editReply({ content: `❌ Limite de tickets atteinte (${settings.tickets.maxTickets}).` });
+            return interaction.editReply({ content: `${getEmoji('ERROR')} Limite de tickets atteinte (${settings.tickets.maxTickets}).` });
         }
 
         const ticketId = await Ticket.getNextId(guild.id);
@@ -131,22 +132,22 @@ const TicketService = {
 
         const embed = new EmbedBuilder()
             .setColor(0x5865F2)
-            .setTitle(`🎫 Ticket #${ticketId}`)
+            .setTitle(`${getEmoji('TICKET')} Ticket #${ticketId}`)
             .setDescription(`Bonjour ${user}, bienvenue dans votre ticket!\n\nDécrivez votre problème et un membre du support vous répondra dès que possible.`)
             .setTimestamp()
             .setFooter({ text: `Ticket créé par ${user.tag}` });
 
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('ticket_close').setLabel('🔒 Fermer').setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId('ticket_claim').setLabel('✋ Prendre en charge').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId('ticket_transcript').setLabel('📄 Transcription').setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId('ticket_close').setLabel('Fermer').setEmoji(getEmoji('TICKET_CLOSE')).setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId('ticket_claim').setLabel('Prendre en charge').setEmoji(getEmoji('TICKET_CLAIM')).setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId('ticket_transcript').setLabel('Transcription').setEmoji(getEmoji('TICKET_TRANSCRIPT')).setStyle(ButtonStyle.Secondary)
         );
 
         await channel.send({ content: `${user} ${(settings.tickets.supportRole || []).map(r => `<@&${r}>`).join(' ')}`, embeds: [embed], components: [row] });
 
         const logEmbed = new EmbedBuilder()
             .setColor(0x57F287)
-            .setTitle('🎫 Nouveau Ticket')
+            .setTitle(`${getEmoji('TICKET')} Nouveau Ticket`)
             .addFields(
                 { name: '👤 Créateur', value: `${user} (\`${user.id}\`)`, inline: true },
                 { name: '🆔 ID Ticket', value: `#${ticketId}`, inline: true },
@@ -155,7 +156,7 @@ const TicketService = {
             .setTimestamp();
         await LogDispatcher.tickets(guild, logEmbed);
 
-        return interaction.editReply({ content: `✅ Votre ticket a été créé: ${channel}` });
+        return interaction.editReply({ content: `${getEmoji('SUCCESS')} Votre ticket a été créé: ${channel}` });
     },
 
     /**
@@ -163,16 +164,16 @@ const TicketService = {
      */
     async closeTicket(client, interaction) {
         const ticket = await Ticket.findOne({ channelId: interaction.channelId, status: { $ne: 'closed' } });
-        if (!ticket) return interaction.reply({ content: '❌ Ce salon n\'est pas un ticket ouvert.', ephemeral: true });
+        if (!ticket) return interaction.reply({ content: `${getEmoji('ERROR')} Ce salon n'est pas un ticket ouvert.`, ephemeral: true });
 
         const settings = await getGuildSettings(client, interaction.guild.id, { create: false });
         const isStaff = isTicketStaff(settings, interaction.member);
 
         if (!isStaff && ticket.userId !== interaction.user.id) {
-            return interaction.reply({ content: '❌ Vous n\'avez pas la permission de fermer ce ticket.', ephemeral: true });
+            return interaction.reply({ content: `${getEmoji('ERROR')} Vous n'avez pas la permission de fermer ce ticket.`, ephemeral: true });
         }
 
-        await interaction.reply({ content: '🔒 Fermeture du ticket dans 5 secondes...' });
+        await interaction.reply({ content: `${getEmoji('TICKET_CLOSE')} Fermeture du ticket dans 5 secondes...` });
 
         const createTranscript = loadTranscriptFn();
         if (settings?.tickets?.transcripts && createTranscript) {
@@ -180,7 +181,7 @@ const TicketService = {
                 const transcript = await createTranscript(interaction.channel, { limit: -1, returnBuffer: false });
                 const logEmbed = new EmbedBuilder()
                     .setColor(0xED4245)
-                    .setTitle(`📄 Ticket #${ticket.ticketId} fermé`)
+                    .setTitle(`${getEmoji('TICKET_TRANSCRIPT')} Ticket #${ticket.ticketId} fermé`)
                     .addFields(
                         { name: '👤 Créateur', value: `<@${ticket.userId}>`, inline: true },
                         { name: '🔒 Fermé par', value: `${interaction.user}`, inline: true },
@@ -218,23 +219,23 @@ const TicketService = {
      */
     async claimTicket(client, interaction) {
         const ticket = await Ticket.findOne({ channelId: interaction.channelId, status: { $ne: 'closed' } });
-        if (!ticket) return interaction.reply({ content: '❌ Ce salon n\'est pas un ticket.', ephemeral: true });
+        if (!ticket) return interaction.reply({ content: `${getEmoji('ERROR')} Ce salon n'est pas un ticket.`, ephemeral: true });
 
         const settings = await getGuildSettings(client, interaction.guild.id, { create: false });
         if (!isTicketStaff(settings, interaction.member)) {
-            return interaction.reply({ content: '❌ Seul le staff peut prendre en charge ce ticket.', ephemeral: true });
+            return interaction.reply({ content: `${getEmoji('ERROR')} Seul le staff peut prendre en charge ce ticket.`, ephemeral: true });
         }
 
         if (ticket.claimedBy) {
-            return interaction.reply({ content: `❌ Ce ticket est déjà pris en charge par <@${ticket.claimedBy}>.`, ephemeral: true });
+            return interaction.reply({ content: `${getEmoji('ERROR')} Ce ticket est déjà pris en charge par <@${ticket.claimedBy}>.`, ephemeral: true });
         }
 
         await Ticket.updateOne({ _id: ticket._id }, { claimedBy: interaction.user.id, status: 'claimed' });
-        await interaction.reply({ content: `✅ **${interaction.user.tag}** a pris en charge ce ticket.` });
+        await interaction.reply({ content: `${getEmoji('TICKET_CLAIM')} **${interaction.user.tag}** a pris en charge ce ticket.` });
 
         const logEmbed = new EmbedBuilder()
             .setColor(0xFEE75C)
-            .setTitle(`✋ Ticket #${ticket.ticketId} pris en charge`)
+            .setTitle(`${getEmoji('TICKET_CLAIM')} Ticket #${ticket.ticketId} pris en charge`)
             .addFields(
                 { name: '👤 Créateur', value: `<@${ticket.userId}>`, inline: true },
                 { name: '👨‍💼 Staff', value: `${interaction.user}`, inline: true },
@@ -250,16 +251,16 @@ const TicketService = {
     async saveTranscript(client, interaction) {
         const createTranscript = loadTranscriptFn();
         if (!createTranscript) {
-            return interaction.reply({ content: '❌ Module de transcription non disponible.', ephemeral: true });
+            return interaction.reply({ content: `${getEmoji('ERROR')} Module de transcription non disponible.`, ephemeral: true });
         }
 
         await interaction.deferReply({ ephemeral: true });
 
         try {
             const transcript = await createTranscript(interaction.channel, { limit: -1 });
-            await interaction.editReply({ content: '📄 Transcription générée:', files: [transcript] });
+            await interaction.editReply({ content: `${getEmoji('TICKET_TRANSCRIPT')} Transcription générée:`, files: [transcript] });
         } catch {
-            await interaction.editReply({ content: '❌ Impossible de générer la transcription.' });
+            await interaction.editReply({ content: `${getEmoji('ERROR')} Impossible de générer la transcription.` });
         }
     },
 

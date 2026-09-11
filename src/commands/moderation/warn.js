@@ -46,7 +46,7 @@ module.exports = {
             const embed = EmbedHelper.info(
                 'Avertissement',
                 `**${member.user.username}** a reçu un avertissement.\n\n**Raison** — ${reason}\n**Total avertissements** — ${warnCount}`,
-                { color: EmbedHelper.Colors.WARNING }
+                { color: EmbedHelper.Colors.WARNING, emoji: EmbedHelper.Emoji('WARN') }
             );
             embed.setThumbnail(member.user.displayAvatarURL({ dynamic: true }));
             embed.setFooter({ text: `Cas #${sanction.caseId}` });

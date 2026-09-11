@@ -63,7 +63,7 @@ module.exports = {
             const embed = EmbedHelper.info(
                 duration ? 'Bannissement temporaire' : 'Bannissement',
                 `**${user.username}** a été banni du serveur.${duration ? `\n**Durée** — ${Helpers.formatDuration(duration)}` : ''}\n**Raison** — ${reason}`,
-                { color: EmbedHelper.Colors.ERROR }
+                { color: EmbedHelper.Colors.ERROR, emoji: EmbedHelper.Emoji('BAN') }
             );
             embed.setThumbnail(user.displayAvatarURL({ dynamic: true }));
             embed.setFooter({ text: `Cas #${sanction.caseId}  ·  ID : ${user.id}` });

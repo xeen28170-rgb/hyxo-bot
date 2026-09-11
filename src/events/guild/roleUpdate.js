@@ -12,7 +12,7 @@ module.exports = {
     async run(client, oldRole, newRole) {
         const guild = newRole.guild || oldRole.guild;
         if (!guild) return;
-        const settings = await getGuildSettings(client, guild.id);
+        const settings = await getGuildSettings(client, guild.id, { create: false });
         await AntiraidService.handleRecentAuditAction(client, guild, AuditLogEvent.RoleUpdate, newRole.id || oldRole.id, settings);
 
         if (settings.statsChannels?.roleCountIds?.[newRole.id || oldRole.id]) {

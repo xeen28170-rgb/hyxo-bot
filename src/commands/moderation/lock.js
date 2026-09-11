@@ -14,6 +14,6 @@ module.exports = {
     async run(client, message, args) {
         const channel = Helpers.resolveChannel(message.guild, args[0]) || message.channel;
         await channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false });
-        message.channel.send({ embeds: [EmbedHelper.success(`🔒 **${channel.name}** a été verrouillé.`)] });
+        message.channel.send({ embeds: [EmbedHelper.success(`${EmbedHelper.Emoji('LOCK')} **${channel.name}** a été verrouillé.`)] });
     },
 };

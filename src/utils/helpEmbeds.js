@@ -92,13 +92,11 @@ const HELP_CATEGORY_BY_COMMAND = buildHelpCategoryMap({
     ],
     tickets: [
         'add',
-        'addmember',
         'modmail',
         'openmodmail',
         'rename',
         'ticket',
         'ticket-manage',
-        'ticketmanage',
     ],
     utility: [
         'alladmins',
@@ -165,7 +163,6 @@ const HELP_CATEGORY_BY_COMMAND = buildHelpCategoryMap({
         'endgiveaway',
         'giveaway',
         'giveaway-settings',
-        'giveawaysettings',
         'reroll',
     ],
     backups: [
@@ -173,10 +170,10 @@ const HELP_CATEGORY_BY_COMMAND = buildHelpCategoryMap({
         'backup',
     ],
     ownerbot: [
-        'activity', 'alias', 'blacklist', 'change', 'changeall',
+        'activity', 'alias', 'bl', 'change', 'changeall',
         'clearowners', 'fivem', 'helpalias', 'helptype', 'lang',
         'langcustom', 'mainprefix', 'mp', 'mp-settings', 'owner',
-        'reset', 'say', 'secur-invite', 'serverActions', 'serverlist',
+        'reset', 'say', 'secur-invite', 'server-action', 'serverlist',
         'set', 'status', 'theme', 'updatebot',
     ],
 });

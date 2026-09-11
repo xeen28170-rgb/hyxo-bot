@@ -146,7 +146,9 @@ async function updateStatsChannels(client, guild, { forceMemberFetch = false, cr
 function scheduleStatsUpdate(client, guild, reason, delay = 15_000) {
     if (!guild?.id) return;
     const guildId = guild.id;
-    if (pendingTimers.has(guildId)) clearTimeout(pendingTimers.get(guildId));
+    // Déjà en attente : on ne réinitialise pas le timer, sinon il ne se
+    // déclencherait jamais sur les serveurs actifs (événements fréquents).
+    if (pendingTimers.has(guildId)) return;
 
     const timer = setTimeout(async () => {
         pendingTimers.delete(guildId);

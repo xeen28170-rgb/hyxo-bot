@@ -1,6 +1,20 @@
 'use strict';
 
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { getEmoji } = require('../config/emojis');
+
+// Emoji par type d'action de modération — utilisé par EmbedHelper.moderation()
+const ACTION_EMOJI_KEYS = {
+    ban: 'BAN', tempban: 'BAN', unban: 'UNBAN',
+    kick: 'KICK',
+    mute: 'MUTE', tempmute: 'MUTE', cmute: 'MUTE', unmute: 'UNMUTE', uncmute: 'UNMUTE', unmuteall: 'UNMUTE',
+    warn: 'WARN',
+    timeout: 'TIMEOUT',
+    lock: 'LOCK', lockall: 'LOCK', globalLock: 'LOCK', unlock: 'UNLOCK', unlockall: 'UNLOCK',
+    hide: 'HIDE', hideall: 'HIDE', unhide: 'UNHIDE', unhideall: 'UNHIDE',
+    prison: 'PRISON', unprison: 'UNPRISON', unprisonall: 'UNPRISON',
+    addrole: 'ROLE_ADD', delrole: 'ROLE_REMOVE', derank: 'DERANK',
+};
 
 // Palette de couleurs — sobre, moderne, cohérent
 const Colors = {
@@ -28,7 +42,7 @@ class EmbedHelper {
     static success(description, options = {}) {
         return new EmbedBuilder()
             .setColor(Colors.SUCCESS)
-            .setDescription(`${description}`)
+            .setDescription(`${getEmoji('SUCCESS')} ${description}`)
             .setTimestamp(options.timestamp !== false ? new Date() : null);
     }
 
@@ -36,7 +50,7 @@ class EmbedHelper {
     static error(description, options = {}) {
         return new EmbedBuilder()
             .setColor(Colors.ERROR)
-            .setDescription(`${description}`)
+            .setDescription(`${getEmoji('ERROR')} ${description}`)
             .setTimestamp(options.timestamp !== false ? new Date() : null);
     }
 
@@ -44,15 +58,16 @@ class EmbedHelper {
     static warning(description, options = {}) {
         return new EmbedBuilder()
             .setColor(Colors.WARNING)
-            .setDescription(`${description}`)
+            .setDescription(`${getEmoji('WARNING')} ${description}`)
             .setTimestamp(options.timestamp !== false ? new Date() : null);
     }
 
     // ─── Info générique (titre + body) ────────────────────────
     static info(title, description, options = {}) {
+        const prefix = options.emoji ? `${options.emoji} ` : '';
         const embed = new EmbedBuilder()
             .setColor(options.color || Colors.PRIMARY)
-            .setTitle(title)
+            .setTitle(`${prefix}${title}`)
             .setDescription(description)
             .setTimestamp(options.timestamp !== false ? new Date() : null);
 
@@ -67,10 +82,12 @@ class EmbedHelper {
 
     // ─── Modération (ban, kick, mute, warn…) ──────────────────
     static moderation({ action, user, moderator, reason, duration, caseId, color }) {
+        const emojiKey = ACTION_EMOJI_KEYS[action?.toLowerCase?.()];
+        const emoji = emojiKey ? `${getEmoji(emojiKey)} ` : '';
         const embed = new EmbedBuilder()
             .setColor(color || Colors.MODERATION)
             .setAuthor({
-                name: `${action}  ·  cas #${caseId}`,
+                name: `${emoji}${action}  ·  cas #${caseId}`,
                 iconURL: user.displayAvatarURL?.({ dynamic: true }) ?? undefined,
             })
             .addFields(
@@ -152,5 +169,6 @@ class EmbedHelper {
 }
 
 EmbedHelper.Colors = Colors;
+EmbedHelper.Emoji = getEmoji;
 
 module.exports = EmbedHelper;

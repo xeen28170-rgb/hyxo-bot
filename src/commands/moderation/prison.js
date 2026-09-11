@@ -170,7 +170,7 @@ async function openPrisonPanel(client, message) {
                 await Guild.updateOne({ guildId }, { 'prison.enabled': false });
                 invalidateGuildSettings(client, guildId);
                 settings = await getGuildSettings(client, guildId, { create: false });
-                await interaction.editReply({ embeds: [EmbedHelper.success('❌ Système de prison désactivé (rôle et salons conservés).')], flags: 64 }).catch(() => {});
+                await interaction.editReply({ embeds: [EmbedHelper.success('❌ Système de prison désactivé (rôle et salons conservés).')] }).catch(() => {});
                 await refreshPanel(panelMessage, guild, settings);
                 return;
             }

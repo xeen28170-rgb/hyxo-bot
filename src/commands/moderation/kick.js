@@ -44,7 +44,7 @@ module.exports = {
             const embed = EmbedHelper.info(
                 'Expulsion',
                 `**${member.user.username}** a été expulsé du serveur.\n**Raison** — ${reason}`,
-                { color: EmbedHelper.Colors.ERROR }
+                { color: EmbedHelper.Colors.ERROR, emoji: EmbedHelper.Emoji('KICK') }
             );
             embed.setThumbnail(member.user.displayAvatarURL({ dynamic: true }));
             embed.setFooter({ text: `Cas #${sanction.caseId}  ·  ID : ${member.id}` });

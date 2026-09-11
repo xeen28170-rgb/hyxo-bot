@@ -12,11 +12,11 @@ module.exports = {
     async run(client, oldChannel, newChannel) {
         const guild = newChannel.guild || oldChannel.guild;
         if (!guild) return;
-        const settings = await getGuildSettings(client, guild.id);
+        const settings = await getGuildSettings(client, guild.id, { create: false });
         await AntiraidService.handleRecentAuditAction(client, guild, AuditLogEvent.ChannelUpdate, newChannel.id || oldChannel.id, settings);
 
         const selfAudit = await LogDispatcher.isSelfAuditAction(client, guild, AuditLogEvent.ChannelUpdate, newChannel.id || oldChannel.id);
-        if (!selfAudit && isStatsChannelId(settings.statsChannels, newChannel.id || oldChannel.id)) {
+        if (!selfAudit && isStatsChannelId(settings?.statsChannels, newChannel.id || oldChannel.id)) {
             scheduleStatsUpdate(client, guild, 'stats_channel_update', 5_000);
         }
         if (selfAudit) return;

@@ -120,7 +120,7 @@ module.exports = {
                     `Erreur: \`${String(error.message).slice(0, 500)}\``,
                 ].join('\n'));
                 await LogDispatcher.errors(message.guild, errorEmbed);
-                message.channel.send({ content: 'Une erreur est survenue lors de l\'exécution de la commande.' });
+                message.channel.send({ content: 'Une erreur est survenue lors de l\'exécution de la commande.' }).catch(() => {});
             }
             return;
         }

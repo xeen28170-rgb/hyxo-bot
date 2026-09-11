@@ -79,7 +79,6 @@ async function openStatsPanel(client, message) {
                 const result = await updateStatsChannels(client, guild, { forceMemberFetch: true, createMissing: true });
                 await interaction.editReply({
                     embeds: [EmbedHelper.success(`Salons de stats synchronisés (${result.updated} renommé(s), ${result.created} créé(s)).`)],
-                    flags: 64,
                 }).catch(() => {});
                 return;
             }
@@ -126,7 +125,6 @@ async function enableStats(client, guild, interaction) {
     const total = (result.updated || 0) + (result.created || 0);
     await interaction.editReply({
         embeds: [EmbedHelper.success(`🟢 Salons de stats **activés**. Compteurs créés/réparés : **${total}**.`)],
-        flags: 64,
     }).catch(() => {});
 }
 

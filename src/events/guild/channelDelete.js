@@ -13,7 +13,7 @@ module.exports = {
     name: 'channelDelete',
     async run(client, channel) {
         if (!channel.guild) return;
-        const settings = await getGuildSettings(client, channel.guild.id);
+        const settings = await getGuildSettings(client, channel.guild.id, { create: false });
         await AntiraidService.handleRecentAuditAction(client, channel.guild, AuditLogEvent.ChannelDelete, channel.id, settings);
 
         // Nettoie les records orphelins (ticket / salle vocale temporaire) dont le salon
@@ -29,7 +29,7 @@ module.exports = {
         }
 
         const selfAudit = await LogDispatcher.isSelfAuditAction(client, channel.guild, AuditLogEvent.ChannelDelete, channel.id);
-        if (!selfAudit && isStatsChannelId(settings.statsChannels, channel.id)) {
+        if (!selfAudit && isStatsChannelId(settings?.statsChannels, channel.id)) {
             scheduleStatsUpdate(client, channel.guild, 'stats_channel_deleted', 5_000);
         }
         if (selfAudit) return;
