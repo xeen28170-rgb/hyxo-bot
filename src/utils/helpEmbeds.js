@@ -59,6 +59,7 @@ const HELP_CATEGORY_BY_COMMAND = buildHelpCategoryMap({
         'mute',
         'mutelist',
         'prison',
+        'prisonlist',
         'public',
         'renew',
         'sanctions',
