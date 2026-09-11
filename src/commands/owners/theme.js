@@ -18,6 +18,6 @@ module.exports = {
         const color = parseInt(hex, 16);
         client.embedColor = color;
         EmbedHelper.Colors.PRIMARY = color;
-        message.channel.send({ embeds: [EmbedHelper.success(`Couleur des embeds changée en **#${hex.toUpperCase()}**.`, { color })] });
+        message.channel.send({ embeds: [EmbedHelper.info('🎨 Thème', `Couleur des embeds changée en **#${hex.toUpperCase()}**.`, { color, timestamp: true })] });
     },
 };

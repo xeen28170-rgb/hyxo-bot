@@ -63,7 +63,7 @@ function makeDefault(guildId) {
             leaveLogs: null, webhookLogs: null, raidLogs: null, ticketLogs: null, securityLogs: null,
             channelLogs: null, serverLogs: null, warnLogs: null, banLogs: null,
             kickLogs: null, muteLogs: null, unmuteLogs: null, timeoutLogs: null,
-            giveawayLogs: null, errorLogs: null,
+            prisonLogs: null, giveawayLogs: null, errorLogs: null,
             ignoredChannels: [], ignoredRoles: []
         },
         moderation: {

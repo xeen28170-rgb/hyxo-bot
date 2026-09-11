@@ -119,9 +119,10 @@ class LogDispatcher {
 
     static async prison(guild, embed) {
         const settings = await getGuildSettings(guild.client, guild.id, { create: false });
-        const channelId = settings?.logs?.prisonLogs || settings?.logs?.modLogs;
-        if (!channelId) return this.send(guild, 'modLogs', embed);
-        return this.send(guild, 'prisonLogs', embed);
+        const hasPrison = Boolean(settings?.logs?.prisonLogs);
+        const hasMod = Boolean(settings?.logs?.modLogs);
+        if (!hasPrison && !hasMod) return;
+        return this.send(guild, hasPrison ? 'prisonLogs' : 'modLogs', embed);
     }
 
     static async moderationAction(guild, action, embed) {
