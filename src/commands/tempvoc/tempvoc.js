@@ -120,7 +120,7 @@ module.exports = {
                 return;
 
             default:
-                return sendHelp(message);
+                return sendHelp(client, message);
         }
     },
 };
@@ -394,7 +394,7 @@ async function handleSetup(client, message, sub, args) {
     }
 }
 
-function sendHelp(message) {
+function sendHelp(client, message) {
     const prefix = message.guildSettings?.prefix || client.prefix;
     message.channel.send({ embeds: [EmbedHelper.info('🎤 TempVoc — Aide', [
         `\`${prefix}tempvoc rename <nom>\` — Renommer`,

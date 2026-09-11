@@ -1,5 +1,6 @@
 'use strict';
 
+const EmbedHelper = require('../../utils/embedBuilder');
 const {
     buildHelpMenuEmbed,
     buildHelpSelectRow,
@@ -16,11 +17,10 @@ module.exports = {
 
         if (args[0]) {
             const commandName = args[0].toLowerCase();
-            const command = client.commands.get(commandName)
-                || [...client.commands.values()].find(c => c.aliases?.includes(commandName));
+            const aliasTarget = client.aliases.get(commandName);
+            const command = client.commands.get(commandName) || (aliasTarget ? client.commands.get(aliasTarget) : null);
 
             if (!command) {
-                const { EmbedHelper } = require('../../utils/embedBuilder');
                 return message.channel.send({ embeds: [EmbedHelper.error(`Commande \`${commandName}\` introuvable.`)] });
             }
 

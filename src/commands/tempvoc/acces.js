@@ -12,7 +12,8 @@ module.exports = {
     usage: '=acces <ID ou @mention> [ID/@mention ...]',
     cooldown: 2,
     async run(client, message, args) {
-        const channel = message.member?.voice?.channel;        if (!channel) {
+        const channel = message.member?.voice?.channel;
+        if (!channel) {
             return message.channel.send({ embeds: [EmbedHelper.error('❌ Vous devez être dans le salon vocal privé pour utiliser `=acces`.')] });
         }
 

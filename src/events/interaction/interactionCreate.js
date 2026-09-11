@@ -253,7 +253,10 @@ async function handleSelectMenu(client, interaction) {
     }
 
     if (customId === 'help_category_select' || customId === 'help_select') {
-        return interaction.reply({ content: '❌ Ce menu d\'aide est expiré. Tapez `-help` à nouveau.', flags: 64 });
+        const prefix = interaction.guild
+            ? (await getGuildSettings(client, interaction.guild.id, { create: false }))?.prefix || client.prefix
+            : client.prefix;
+        return interaction.reply({ content: `❌ Ce menu d'aide est expiré. Tapez \`${prefix}help\` à nouveau.`, flags: 64 });
     }
 }
 

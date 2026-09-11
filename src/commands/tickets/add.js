@@ -15,7 +15,8 @@ module.exports = {
         const ticket = await Ticket.findOne({ channelId: message.channel.id, status: { $ne: 'closed' } });
         if (!ticket) return message.channel.send({ embeds: [EmbedHelper.error('Ce salon n\'est pas un ticket ouvert.')] });
 
-        const isRemove = message.content.trim().toLowerCase().startsWith(`${client.prefix}del`);
+        const prefix = message.guildSettings?.prefix || client.prefix;
+        const isRemove = message.content.trim().toLowerCase().startsWith(`${prefix}del`);
         const member = await Helpers.resolveMember(message.guild, args[0]);
         if (!member) return message.channel.send({ embeds: [EmbedHelper.error('Membre introuvable.')] });
 
