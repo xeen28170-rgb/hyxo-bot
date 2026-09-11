@@ -13,7 +13,7 @@ module.exports = {
 
         if (!muteRoleId) {
             const prefix = message.guildSettings?.prefix || client.prefix;
-            return message.channel.send({ embeds: [EmbedHelper.error(`Aucun rôle mute configuré. Utilisez \`${prefix}setmuterole\` d\'abord.`)] });
+            return message.channel.send({ embeds: [EmbedHelper.error(`Aucun rôle mute configuré. Utilisez \`${prefix}setmuterole\` d'abord.`)] });
         }
 
         const muteRole = message.guild.roles.cache.get(muteRoleId);

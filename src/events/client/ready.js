@@ -29,7 +29,7 @@ module.exports = {
         const setActivity = () => {
             const activities = [
                 { name: `${client.guilds.cache.size} serveurs`, type: ActivityType.Watching },
-                { name: '-help | Gestions', type: ActivityType.Playing },
+                { name: `${client.prefix}help | Gestions`, type: ActivityType.Playing },
                 { name: `${client.commands.size} commandes`, type: ActivityType.Listening },
             ];
             const activity = activities[Math.floor(Math.random() * activities.length)];

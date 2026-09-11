@@ -86,8 +86,7 @@ const HELP_CATEGORY_BY_COMMAND = buildHelpCategoryMap({
         'warns',
     ],
     logs: [
-        'logs',
-        'statschannels',
+        'statsconfig',
         'modsettings',
     ],
     tickets: [

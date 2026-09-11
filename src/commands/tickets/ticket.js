@@ -54,7 +54,7 @@ module.exports = {
             case 'supportrole':
                 return setSupportRole(client, message, args.slice(1));
             default:
-                return sendHelp(message);
+                return sendHelp(client, message);
         }
     },
 };
@@ -345,7 +345,7 @@ async function setSupportRole(client, message, args) {
     message.channel.send({ embeds: [EmbedHelper.success(`✅ Rôle support ajouté: ${role}`)] });
 }
 
-function sendHelp(message) {
+function sendHelp(client, message) {
     const prefix = message.guildSettings?.prefix || client.prefix;
     const embed = EmbedHelper.info('🎫 Tickets — Aide', [
         `\`${prefix}ticket enable\` — Activer les tickets`,
