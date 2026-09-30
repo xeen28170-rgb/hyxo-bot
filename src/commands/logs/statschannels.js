@@ -101,15 +101,23 @@ async function updateStatsChannels(client, guild, { forceMemberFetch = false, cr
             ? (guild.channels.cache.get(channelId) || await guild.channels.fetch(channelId).catch(() => null))
             : null;
 
+        // Anciens compteurs créés en salon textuel : Discord y remplace les espaces
+        // par des tirets et retire les « : ». On les recrée en vocal.
+        const legacyText = channel?.type === ChannelType.GuildText;
+        if (legacyText) {
+            await channel.delete('[Stats] Conversion en salon vocal').catch(() => {});
+            channel = null;
+        }
+
         if (channel) {
             if (channel.name !== targetName) {
                 await channel.setName(targetName, '[Stats] Mise à jour').catch(() => {});
                 updated++;
             }
-        } else if (createMissing) {
+        } else if (createMissing || legacyText) {
             const ch = await guild.channels.create({
                 name: targetName,
-                type: ChannelType.GuildText,
+                type: ChannelType.GuildVoice,
                 parent: category.id,
                 permissionOverwrites: [{ id: guild.id, deny: ['Connect', 'SendMessages'] }],
             }).catch(() => null);
