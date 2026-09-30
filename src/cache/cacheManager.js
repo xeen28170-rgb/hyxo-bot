@@ -42,7 +42,11 @@ class CacheManager {
     }
 
     async init() {
-        setInterval(() => this.cleanup(), 60 * 1000); // Toutes les minutes
+        if (!globalThis.__xeenCacheInitStarted) {
+            globalThis.__xeenCacheInitStarted = true;
+            const timer = setInterval(() => this.cleanup(), 60 * 1000); // Toutes les minutes
+            if (timer.unref) timer.unref();
+        }
         Logger.debug('Cache Manager initialisé');
     }
 
@@ -70,10 +74,12 @@ class CacheManager {
             pending = Promise.resolve()
                 .then(loader)
                 .then(data => {
-                    if (data) this.setGuild(guildId, data);
+                    if (data && this.guildLoads.get(guildId) === pending) this.setGuild(guildId, data);
                     return data;
                 })
-                .finally(() => this.guildLoads.delete(guildId));
+                .finally(() => {
+                    if (this.guildLoads.get(guildId) === pending) this.guildLoads.delete(guildId);
+                });
             this.guildLoads.set(guildId, pending);
         }
 
@@ -81,6 +87,7 @@ class CacheManager {
     }
 
     invalidateGuild(guildId) {
+        this.guildLoads.delete(guildId);
         this.guilds.delete(guildId);
         this.permissions.delete(guildId);
     }

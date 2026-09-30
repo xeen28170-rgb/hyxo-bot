@@ -15,6 +15,11 @@ module.exports = {
     cooldown: 10,
     async run(client, message, args) {
         const sub = args[0]?.toLowerCase();
+        if (sub === 'delete') {
+            if (!args[1]) return message.channel.send({ embeds: [EmbedHelper.error('ID manquant.')] });
+            const removed = await Backup.findOneAndDelete({ backupId: args[1], guildId: message.guild.id });
+            return message.channel.send({ embeds: [removed ? EmbedHelper.success('Sauvegarde supprimee.') : EmbedHelper.error('Sauvegarde introuvable.')] });
+        }
 
         if (sub === 'create') {
             const backup = await BackupService.create(message.guild, message.author.id);
@@ -36,8 +41,9 @@ module.exports = {
                 `**Rôles :** ${report.roles.filter(r => r.status === 'created').length} créés, ${report.roles.filter(r => r.status === 'duplicate').length} déjà présents, ${report.roles.filter(r => r.status === 'failed').length} en échec`,
                 `**Salons :** ${report.channels.filter(c => c.status === 'created').length} créés, ${report.channels.filter(c => c.status === 'duplicate').length} déjà présents, ${report.channels.filter(c => c.status === 'failed').length} en échec`,
             ];
-            if (report.failed > 0) lines.push('⚠️ Certains éléments n\'ont pas pu être restaurés (vérifiez les permissions du bot).');
-            return message.channel.send({ embeds: [EmbedHelper.success(`Le serveur a été restauré avec succès.\n${lines.join('\n')}`)] });
+            lines.push(`Elements restaures : ${report.restored}. Echecs : ${report.failed}.`);
+            if (report.failed > 0) lines.push('Restauration partielle : configuration conservee. ' + report.errors.slice(0, 3).join('\n'));
+            return message.channel.send({ embeds: [EmbedHelper.info('Bilan de restauration', lines.join('\n').slice(0, 4000))] });
         }
 
         if (sub === 'list') {

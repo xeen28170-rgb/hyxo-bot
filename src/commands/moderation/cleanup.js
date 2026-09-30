@@ -2,6 +2,7 @@
 
 const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
+const { mapLimit } = require('../../utils/concurrency');
 
 module.exports = {
     name: 'cleanup',
@@ -19,12 +20,11 @@ module.exports = {
         if (!members.size)
             return message.channel.send({ embeds: [EmbedHelper.error('Le salon est déjà vide.')] });
 
-        let count = 0;
-        for (const member of members.values()) {
-            await member.voice.disconnect().catch(() => {});
-            count++;
-        }
+        const results = await mapLimit([...members.values()], (member) => member.voice.disconnect(), 5);
+        const count = results.filter(r => r.ok).length;
+        const failed = results.length - count;
 
-        message.channel.send({ embeds: [EmbedHelper.success(`**${count}** membre${count > 1 ? 's' : ''} déconnecté${count > 1 ? 's' : ''} du salon **${channel.name}**.`)] });
+        const report = `**${count}** membres déconnectés du salon <#${channel.id}>. **${failed}** échecs.`;
+        await message.channel.send({ embeds: [failed ? EmbedHelper.warning(report) : EmbedHelper.success(report)], allowedMentions: { parse: [] } });
     },
 };

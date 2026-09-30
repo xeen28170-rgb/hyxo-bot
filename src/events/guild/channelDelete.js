@@ -8,6 +8,7 @@ const { isStatsChannelId, scheduleStatsUpdate } = require('../../commands/logs/s
 const { getGuildSettings } = require('../../utils/guildSettings');
 const Ticket = require('../../models/Ticket');
 const TempVoice = require('../../models/TempVoice');
+const { PrivateVoice } = require('../../utils/privateVoice');
 
 module.exports = {
     name: 'channelDelete',
@@ -16,14 +17,18 @@ module.exports = {
         const settings = await getGuildSettings(client, channel.guild.id, { create: false });
         await AntiraidService.handleRecentAuditAction(client, channel.guild, AuditLogEvent.ChannelDelete, channel.id, settings);
 
-        // Nettoie les records orphelins (ticket / salle vocale temporaire) dont le salon
-        // vient d'être supprimé — évite les entrées résiduelles pointant vers un canal mort.
+        // Nettoie les records orphelins (ticket / salle vocale temporaire / salon privé)
+        // dont le salon vient d'être supprimé — évite les entrées résiduelles pointant
+        // vers un canal mort.
         try {
             const ticket = await Ticket.findOne({ channelId: channel.id });
             if (ticket) await Ticket.deleteOne({ channelId: channel.id });
 
             const voice = await TempVoice.findOne({ channelId: channel.id });
             if (voice) await TempVoice.deleteOne({ channelId: channel.id });
+
+            const pv = await PrivateVoice.findOne({ channelId: channel.id });
+            if (pv) await PrivateVoice.deleteOne({ channelId: channel.id });
         } catch (e) {
             require('../../utils/logger').error('[channelDelete] Erreur nettoyage records:', e);
         }

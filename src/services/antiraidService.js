@@ -1,6 +1,6 @@
 'use strict';
 
-const { AuditLogEvent, PermissionFlagsBits } = require('discord.js');
+const { AuditLogEvent, PermissionFlagsBits, Routes } = require('discord.js');
 const AntiraidLog = require('../models/AntiraidLog');
 const SecurityLog = require('../models/SecurityLog');
 const Guild = require('../models/Guild');
@@ -9,6 +9,7 @@ const EmbedHelper = require('../utils/embedBuilder');
 const LogDispatcher = require('../utils/logDispatcher');
 const PermissionsHelper = require('../utils/permissions');
 const { isWhitelisted } = require('../utils/whitelist');
+const { mapLimit } = require('../utils/concurrency');
 
 const ACTION_TO_MODULE = {
     [AuditLogEvent.ChannelCreate]:     { module: 'antichannel', group: 'channel' },
@@ -84,8 +85,14 @@ const THRESHOLD_ALIASES = {
     here: ['here', 'antihere'],
 };
 
+// Permissions dont l'ajout déclenche une annulation immédiate (escalade).
+const CRITICAL_PERMISSIONS = PermissionFlagsBits.Administrator | PermissionFlagsBits.ManageGuild
+    | PermissionFlagsBits.ManageRoles | PermissionFlagsBits.ManageChannels | PermissionFlagsBits.ManageWebhooks
+    | PermissionFlagsBits.BanMembers | PermissionFlagsBits.KickMembers;
+const LOCK_PERMISSIONS =['SendMessages', 'SendMessagesInThreads', 'AddReactions'];
 const massJoinCache = new Map(); // guildId → { joins: [timestamps], alerted: bool }
 const recentVanityBans = new Map(); // guildId:executorId → timestamp (anti double-ban)
+const processedVanityLogs = new Map(); // auditLogId → timestamp (dédup anti-down, séparée d'antiraid)
 
 const AntiraidService = {
 
@@ -99,17 +106,17 @@ const AntiraidService = {
         const antidown = settings?.antidown;
         if (!antidown?.enabled) return;
 
-        // Déduplication : éviter de traiter deux fois le même changement d'URL
-        // (l'événement temps réel ET le fallback guildUpdate peuvent se déclencher).
-        if (auditLog?.id) {
-            if (processedAuditLogs.has(auditLog.id)) return;
-            processedAuditLogs.set(auditLog.id, Date.now());
-        }
-
         // Identifier un changement de vanity url dans l'audit log
         const changes = auditLog?.changes || [];
         const vanityChange = changes.find(c => c?.key === 'vanity_url_code');
         if (!vanityChange) return;
+
+        // Déduplication propre à l'anti-down (l'événement temps réel ET le fallback
+        // guildUpdate peuvent se déclencher). Map séparée : ne doit pas bloquer antiupdate.
+        if (auditLog?.id) {
+            if (processedVanityLogs.has(auditLog.id)) return;
+            processedVanityLogs.set(auditLog.id, Date.now());
+        }
 
         const executorId = auditLog.executorId;
         if (!executorId) return;
@@ -135,7 +142,8 @@ const AntiraidService = {
         }
 
         Logger.warn(`[ANTIDOWN] ${guild.name}: tentative de changement d'URL vanity par ${executorId} (${newVanity || 'suppression'})`);
-        await this.logDecision(client, guild, settings, {
+        // Journalisation non bloquante : la réaction doit partir immédiatement.
+        Promise.resolve(this.logDecision(client, guild, settings, {
             level: 'detect',
             moduleKey: 'antidown',
             group: 'vanity',
@@ -143,25 +151,38 @@ const AntiraidService = {
             action: 'guildUpdate.vanity_url_code',
             reason: 'modification URL serveur non autorisée',
             punishment: 'ban',
-        });
+        })).catch(() => {});
 
-        // Restaurer l'ancienne URL directement, quoi qu'il arrive.
-        // Référence = la valeur verrouillée (antidown.vanity), sinon l'ancienne valeur de l'audit log.
+        // Ban et restauration en parallèle : chaque ms compte avant qu'un autre serveur
+        // ne récupère l'URL libérée. Whitelist incluse ne bypass PAS.
+        await Promise.all([
+            this.restoreVanity(client, guild, antidown, oldVanity, newVanity),
+            this.hardBan(client, guild, settings, executorId, '[ANTIDOWN] Changement URL serveur non autorisé'),
+        ]);
+    },
+
+    async restoreVanity(client, guild, antidown, oldVanity, newVanity) {
+        // Référence = valeur verrouillée, sinon ancienne valeur de l'audit log.
         const lockedUrl = antidown.vanity || oldVanity;
-        if (lockedUrl && lockedUrl !== newVanity) {
-            const locked = await guild.setVanityCode(lockedUrl, '[ANTIDOWN] Restauration URL serveur').catch(() => null);
-            if (locked && locked !== newVanity) {
-                Logger.warn(`[ANTIDOWN] ${guild.name}: URL restaurée vers discord.gg/${lockedUrl}`);
-            } else {
-                Logger.warn(`[ANTIDOWN] ${guild.name}: restauration URL impossible (perms ou vanity indisponible)`);
-            }
-        } else if (!lockedUrl) {
-            Logger.warn(`[ANTIDOWN] ${guild.name}: aucune URL de référence verrouillée, enregistrement de la précédente`);
-            await Guild.updateOne({ guildId: guild.id }, { 'antidown.vanity': oldVanity || null });
+        if (!lockedUrl) {
+            Logger.warn(`[ANTIDOWN] ${guild.name}: aucune URL de référence verrouillée`);
+            return;
         }
+        if (!antidown.vanity) {
+            Guild.updateOne({ guildId: guild.id }, { 'antidown.vanity': lockedUrl }).catch(() => {});
+        }
+        if (antidown.restore === false || lockedUrl === newVanity) return;
 
-        // Ban automatique (whitelist incluse ne bypass PAS)
-        await this.hardBan(client, guild, settings, executorId, '[ANTIDOWN] Changement URL serveur non autorisé');
+        // discord.js v14 n'a pas de guild.setVanityCode -> appel REST direct
+        try {
+            await client.rest.patch(Routes.guildVanityUrl(guild.id), {
+                body: { code: lockedUrl },
+                reason: '[ANTIDOWN] Restauration URL serveur',
+            });
+            Logger.warn(`[ANTIDOWN] ${guild.name}: URL restaurée vers discord.gg/${lockedUrl}`);
+        } catch (err) {
+            Logger.warn(`[ANTIDOWN] ${guild.name}: restauration URL impossible (${err.code || ''} ${err.message})`);
+        }
     },
 
     async hardBan(client, guild, settings, executorId, reason) {
@@ -176,40 +197,56 @@ const AntiraidService = {
         recentVanityBans.set(dedupKey, Date.now());
 
         const member = await guild.members.fetch(executorId).catch(() => null);
-        if (member && !member.bannable) {
+
+        // Toujours tracer le résultat réel : un ban impossible ou raté doit être signalé, pas maquillé en succès.
+        let punishment = 'ban';
+        let detail = reason;
+        if (executorId === guild.ownerId) {
+            punishment = 'aucune';
+            detail = `${reason}\n⚠️ Propriétaire du serveur : ban impossible (Discord).`;
+            Logger.warn(`[ANTIDOWN] Impossible de bannir le propriétaire du serveur (${executorId}) — Discord empêche l'auto-ban du owner`);
+        } else if (member && !member.bannable) {
+            punishment = 'aucune';
+            detail = `${reason}\n⚠️ Ban impossible : rôle de l'exécuteur au-dessus du bot.`;
             Logger.warn(`[ANTIDOWN] Impossible de bannir ${executorId} (hiérarchie)`);
-            return;
+        } else {
+            LogDispatcher.markModerationAction(guild.id, 'ban', executorId);
+            try {
+                await guild.members.ban(executorId, { reason, deleteMessageSeconds: 0 });
+            } catch (err) {
+                punishment = 'échec';
+                detail = `${reason}\n⚠️ Échec du ban : ${err.message}`;
+                Logger.error(`[ANTIDOWN] Échec du ban de ${executorId}:`, { message: err.message });
+            }
         }
 
-        LogDispatcher.markModerationAction(guild.id, 'ban', executorId);
-        await guild.members.ban(executorId, { reason, deleteMessageSeconds: 0 });
-
-        await AntiraidLog.create({
-            guildId: guild.id,
-            executorId,
-            executorTag: member?.user?.tag || executorId,
-            action: 'vanity',
-            punishment: 'ban',
-            count: 1,
-            details: { moduleKey: 'antidown', group: 'vanity' },
-        });
-
-        await SecurityLog.create({
-            type: 'antidown',
-            module: 'antidown',
-            action: 'vanity',
-            guildId: guild.id,
-            userId: executorId,
-            userTag: member?.user?.tag || executorId,
-            reason,
-            punishment: 'ban',
-            count: 1,
-            details: { moduleKey: 'antidown' },
-        });
-
-        await this.notifyRaid(client, guild, settings, member?.user || { id: executorId, tag: executorId }, 'vanity', 1, 'ban', {
-            detail: reason,
-        });
+        const executorTag = member?.user?.tag || executorId;
+        await Promise.all([
+            AntiraidLog.create({
+                guildId: guild.id,
+                executorId,
+                executorTag,
+                action: 'vanity',
+                punishment,
+                count: 1,
+                details: { moduleKey: 'antidown', group: 'vanity' },
+            }),
+            SecurityLog.create({
+                type: 'antidown',
+                module: 'antidown',
+                action: 'vanity',
+                guildId: guild.id,
+                userId: executorId,
+                userTag: executorTag,
+                reason: detail,
+                punishment,
+                count: 1,
+                details: { moduleKey: 'antidown' },
+            }),
+            this.notifyRaid(client, guild, settings, member?.user || { id: executorId, tag: executorId }, 'vanity', 1, punishment, {
+                detail,
+            }),
+        ]).catch(err => Logger.error('[ANTIDOWN] Erreur journalisation:', { message: err.message }));
     },
 
     async handleAuditLog(client, guild, auditLog, settings) {
@@ -242,6 +279,10 @@ const AntiraidService = {
             return;
         }
 
+        // Une seule escalade (Admin donné à un rôle/membre) suffit à compromettre le
+        // serveur : annulation + sanction immédiates, sans attendre le seuil.
+        if (await this.handlePrivilegeEscalation(client, guild, auditLog, settings, moduleKey, group, executorId)) return;
+
         const cfg = this.resolveThresholdConfig(ar, group);
         const window = cfg.windowMs;
         const threshold = cfg.threshold;
@@ -270,7 +311,7 @@ const AntiraidService = {
         }
 
         const cacheKey = `${guild.id}:${executorId}:${group}`;
-        const tracker = client.antiRaidCache.get(cacheKey) || { times: [] };
+        const tracker = client.antiRaidCache.get(cacheKey) || { times: [], windowMs: window };
 
         tracker.times = tracker.times.filter(t => now - t < window);
         tracker.times.push(now);
@@ -290,6 +331,59 @@ const AntiraidService = {
             });
             await this.punish(client, guild, executorId, settings, moduleKey, group, tracker.times.length);
         }
+    },
+
+    /**
+     * Annule immédiatement l'attribution de permissions critiques par un exécuteur
+     * non autorisé (rôle modifié, rôle créé, rôle dangereux donné à un membre).
+     * @returns {Promise<boolean>} true si une escalade a été traitée
+     */
+    async handlePrivilegeEscalation(client, guild, auditLog, settings, moduleKey, group, executorId) {
+        const change = key => (auditLog.changes || []).find(c => c?.key === key);
+        const reason = '[ANTIRAID] Escalade de permissions annulée';
+        let revert = null;
+        let detail = '';
+
+        if (auditLog.action === AuditLogEvent.RoleUpdate || auditLog.action === AuditLogEvent.RoleCreate) {
+            const perms = change('permissions');
+            if (!perms) return false;
+            const before = BigInt(perms.old ?? 0);
+            const added = BigInt(perms.new ?? 0) & ~before;
+            if (!(added & CRITICAL_PERMISSIONS)) return false;
+            const role = guild.roles.cache.get(auditLog.targetId);
+            if (!role || role.managed) return false;
+            detail = `Permissions critiques ajoutées au rôle ${role.name}`;
+            revert = auditLog.action === AuditLogEvent.RoleCreate
+                ? () => role.delete(reason)
+                : () => role.setPermissions(before, reason);
+        } else if (auditLog.action === AuditLogEvent.MemberRoleUpdate) {
+            const addedIds = (change('$add')?.new || []).map(r => r.id);
+            const critical = addedIds.map(id => guild.roles.cache.get(id))
+                .filter(role => role && (role.permissions.bitfield & CRITICAL_PERMISSIONS));
+            if (!critical.length) return false;
+            const target = await guild.members.fetch(auditLog.targetId).catch(() => null);
+            if (!target) return false;
+            detail = `Rôle(s) critique(s) donné(s) à ${target.user.tag} : ${critical.map(r => r.name).join(', ')}`;
+            revert = () => target.roles.remove(critical, reason);
+        } else {
+            return false;
+        }
+
+        Logger.warn(`[ANTIRAID][ESCALADE] ${guild.name}: ${detail} par ${executorId}`);
+        await Promise.all([
+            Promise.resolve(revert()).catch(err => Logger.warn(`[ANTIRAID][ESCALADE] Annulation impossible: ${err.message}`)),
+            this.punish(client, guild, executorId, settings, moduleKey, group, 1),
+        ]);
+        this.logDecision(client, guild, settings, {
+            level: 'detect',
+            moduleKey,
+            group,
+            executorId,
+            action: auditLog.action,
+            reason: detail,
+            punishment: settings.antiraid?.punishments?.[moduleKey] || settings.antiraid?.punishment || 'derank',
+        }).catch(() => {});
+        return true;
     },
 
     async handleRecentAuditAction(client, guild, action, targetId, settings) {
@@ -340,18 +434,20 @@ const AntiraidService = {
         const now = Date.now();
 
         if (effectiveState === 'max') {
+            await message.delete().catch(() => {});
             await this.punish(client, guild, executorId, settings, moduleKey, group, 1);
             return true;
         }
 
         const cacheKey = `${guild.id}:${executorId}:${group}`;
-        const tracker = client.antiRaidCache.get(cacheKey) || { times: [] };
+        const tracker = client.antiRaidCache.get(cacheKey) || { times: [], windowMs: cfg.windowMs };
         tracker.times = tracker.times.filter(t => now - t < cfg.windowMs);
         tracker.times.push(now);
         client.antiRaidCache.set(cacheKey, tracker);
 
         if (tracker.times.length >= cfg.threshold) {
             client.antiRaidCache.delete(cacheKey);
+            await message.delete().catch(() => {});
             await this.punish(client, guild, executorId, settings, moduleKey, group, tracker.times.length);
             return true;
         }
@@ -406,6 +502,10 @@ const AntiraidService = {
                     }
 
                     Logger.warn(`[ANTIRAID][ANTIBOT] Bot non autorisé: ${member.user.tag} (${guild.name})`);
+                    if (!member.kickable) {
+                        Logger.warn(`[ANTIRAID][ANTIBOT] Impossible de kicker ${member.user.tag} (hiérarchie insuffisante)`);
+                        return;
+                    }
                     LogDispatcher.markModerationAction(guild.id, 'kick', member.id);
                     await member.kick('[ANTIRAID] Bot non autorisé');
                     await this.notifyRaid(client, guild, settings, member.user, 'antibot', 1, 'kick');
@@ -454,13 +554,19 @@ const AntiraidService = {
     async punish(client, guild, executorId, settings, moduleKey, group, count) {
         const ar = settings.antiraid;
 
-        const punishment = ar.punishments?.[moduleKey] || ar.punishment || 'derank';
+        let punishment = ar.punishments?.[moduleKey] || ar.punishment || 'derank';
 
         let member = null;
         try {
             member = await guild.members.fetch(executorId);
         } catch {
             // ignore
+        }
+
+        // Un bot garde son rôle d'intégration (managed, impossible à retirer) :
+        // derank/timeout le laisseraient actif, on l'expulse directement.
+        if (member?.user?.bot && (punishment === 'derank' || punishment === 'timeout')) {
+            punishment = 'kick';
         }
 
         if (!member && punishment !== 'ban') return;
@@ -470,6 +576,7 @@ const AntiraidService = {
 
         const auditReason = `[ANTIRAID] ${group} — ${count}x détecté`;
 
+        let actionTaken = false;
         try {
             switch (punishment) {
                 case 'derank': {
@@ -484,6 +591,7 @@ const AntiraidService = {
                     );
                     if (roles.size > 0) {
                         await member.roles.remove(roles, auditReason);
+                        actionTaken = true;
                     }
                     break;
                 }
@@ -492,17 +600,25 @@ const AntiraidService = {
                     if (!member.kickable) break;
                     LogDispatcher.markModerationAction(guild.id, 'kick', executorId);
                     await member.kick(auditReason);
+                    actionTaken = true;
                     break;
                 case 'ban':
                     if (member && !member.bannable) break;
                     LogDispatcher.markModerationAction(guild.id, 'ban', executorId);
                     await guild.members.ban(executorId, { reason: auditReason, deleteMessageSeconds: 0 });
+                    actionTaken = true;
                     break;
                 case 'timeout':
                     if (!member) break;
                     if (!member.moderatable) break;
                     await member.timeout(24 * 60 * 60 * 1000, auditReason);
+                    actionTaken = true;
                     break;
+            }
+
+            if (!actionTaken) {
+                Logger.warn(`[ANTIRAID] Punition ${punishment} non appliquée sur ${executorId} (${group}) — pas de membre ou hiérarchie insuffisante`);
+                return;
             }
 
             await AntiraidLog.create({
@@ -539,22 +655,34 @@ const AntiraidService = {
         const botMember = guild.members.me;
         if (!botMember?.permissions.has(PermissionFlagsBits.ManageChannels)) return;
 
-        let locked = 0;
         const everyoneRole = guild.roles.everyone;
 
-        for (const [, channel] of guild.channels.cache) {
-            if (!['GuildText', 'GuildNews', 'GuildForum'].includes(channel.type?.toString?.() || '') &&
-                channel.type !== 0 && channel.type !== 5 && channel.type !== 15) continue;
+        const targets = [...guild.channels.cache.values()].filter(channel =>
+            channel.type === 0 || channel.type === 5 || channel.type === 15);
 
-            try {
-                await channel.permissionOverwrites.edit(everyoneRole, {
-                    SendMessages: false,
-                    SendMessagesInThreads: false,
-                    AddReactions: false,
-                }, { reason });
-                locked++;
-            } catch { /* skip channels où on n'a pas les perms */ }
+        // Mémoriser les permissions @everyone d'origine pour que l'unlock ne rouvre pas
+        // les salons déjà fermés (annonces, lecture seule…). Un second lockdown ne
+        // doit pas écraser la photo d'origine par l'état verrouillé.
+        const stored = await Guild.findOne({ guildId: guild.id }).catch(() => null);
+        if (!stored?.antiraid?.lockdownSnapshot) {
+            const snapshot = {};
+            for (const channel of targets) {
+                const overwrite = channel.permissionOverwrites.cache.get(everyoneRole.id);
+                snapshot[channel.id] = Object.fromEntries(LOCK_PERMISSIONS.map(perm => [perm,
+                    overwrite?.allow.has(perm) ? true : overwrite?.deny.has(perm) ? false : null]));
+            }
+            await Guild.updateOne({ guildId: guild.id }, { 'antiraid.lockdownSnapshot': snapshot }).catch(() => {});
         }
+
+        // En parallèle (limite 8) : pendant un raid, verrouiller salon par salon en
+        // série laissait le serveur ouvert trop longtemps.
+        const results = await mapLimit(targets, (channel) =>
+            channel.permissionOverwrites.edit(everyoneRole, {
+                SendMessages: false,
+                SendMessagesInThreads: false,
+                AddReactions: false,
+            }, { reason }), 8);
+        const locked = results.filter(r => r.ok).length;
 
         Logger.warn(`[ANTIRAID][LOCKDOWN] ${guild.name}: ${locked} salons verrouillés`);
 
@@ -574,21 +702,20 @@ const AntiraidService = {
         const botMember = guild.members.me;
         if (!botMember?.permissions.has(PermissionFlagsBits.ManageChannels)) return 0;
 
-        let unlocked = 0;
         const everyoneRole = guild.roles.everyone;
 
-        for (const [, channel] of guild.channels.cache) {
-            if (channel.type !== 0 && channel.type !== 5 && channel.type !== 15) continue;
+        const targets = [...guild.channels.cache.values()].filter(channel =>
+            channel.type === 0 || channel.type === 5 || channel.type === 15);
 
-            try {
-                await channel.permissionOverwrites.edit(everyoneRole, {
-                    SendMessages: null,
-                    SendMessagesInThreads: null,
-                    AddReactions: null,
-                }, { reason });
-                unlocked++;
-            } catch { /* skip */ }
-        }
+        const stored = await Guild.findOne({ guildId: guild.id }).catch(() => null);
+        const snapshot = stored?.antiraid?.lockdownSnapshot || {};
+        const neutral = Object.fromEntries(LOCK_PERMISSIONS.map(perm => [perm, null]));
+
+        // Restaure l'état d'avant le lockdown (neutre pour les salons créés depuis).
+        const results = await mapLimit(targets, (channel) =>
+            channel.permissionOverwrites.edit(everyoneRole, snapshot[channel.id] || neutral, { reason }), 8);
+        const unlocked = results.filter(r => r.ok).length;
+        await Guild.updateOne({ guildId: guild.id }, { 'antiraid.lockdownSnapshot': null }).catch(() => {});
 
         const entry = massJoinCache.get(guild.id);
         if (entry) entry.lockdown = false;
@@ -599,7 +726,7 @@ const AntiraidService = {
 
     async notifyRaid(client, guild, settings, user, action, count, punishment, extra = {}) {
         if (!settings?.logs?.enabled) return;
-        if (!settings.logs?.raidLogs) return;
+        if (!settings.logs?.raidLogs && !settings.logs?.securityLogs) return;
 
         const actionLabels = {
             channel:       '📁 Opérations sur les salons',
@@ -737,14 +864,16 @@ const AntiraidService = {
         }
         const text = String(value).trim();
         if (/^\d+$/.test(text)) {
-            return { threshold: parseInt(text, 10), windowMs: DEFAULT_WINDOW_MS };
+            const numeric = parseInt(text, 10);
+            if (!numeric) return null; // 0 déclencherait immédiatement à chaque message
+            return { threshold: numeric, windowMs: DEFAULT_WINDOW_MS };
         }
-        const match = text.match(/^(\d+)\s*\/\s*(\d+)\s*(ms|s|m)?$/i);
+        const match = text.match(/^(\d+)\s*\/\s*(\d+)\s*(ms|s|m|h|w)?$/i);
         if (!match) return null;
         const threshold = parseInt(match[1], 10);
         const amount = parseInt(match[2], 10);
         const unit = (match[3] || 's').toLowerCase();
-        const factor = unit === 'ms' ? 1 : unit === 'm' ? 60_000 : 1000;
+        const factor = unit === 'ms' ? 1 : unit === 'm' ? 60_000 : unit === 'h' ? 3_600_000 : unit === 'w' ? 604_800_000 : 1000;
         const windowMs = amount * factor;
         if (!threshold || !windowMs) return null;
         return { threshold, windowMs };
@@ -766,7 +895,8 @@ const AntiraidService = {
         const now = Date.now();
         if (client?.antiRaidCache) {
             for (const [key, tracker] of client.antiRaidCache) {
-                const fresh = tracker.times?.filter(t => now - t < DEFAULT_WINDOW_MS * 2);
+                const windowMs = tracker.windowMs || DEFAULT_WINDOW_MS * 2;
+                const fresh = tracker.times?.filter(t => now - t < windowMs);
                 if (!fresh || fresh.length === 0) {
                     client.antiRaidCache.delete(key);
                 } else {
@@ -786,6 +916,9 @@ const AntiraidService = {
         for (const [key, timestamp] of recentVanityBans) {
             if (now - timestamp > 60_000) recentVanityBans.delete(key);
         }
+        for (const [auditId, timestamp] of processedVanityLogs) {
+            if (now - timestamp > 60_000) processedVanityLogs.delete(auditId);
+        }
     },
 
     /**
@@ -800,9 +933,14 @@ const AntiraidService = {
 // Balayage périodique : purge les caches du module (audit logs déjà traités, mass-join)
 // pour éviter une fuite mémoire. `cleanupCache(client)` — qui purge aussi l'antiRaidCache
 // du client — est appelé depuis ready.js qui dispose de la référence au client.
-const cleanupTimer = setInterval(() => {
-    AntiraidService.cleanupModuleCache();
-}, 5 * 60_000);
-if (cleanupTimer.unref) cleanupTimer.unref();
+// Un hot-reload du module ne doit pas empiler plusieurs minuteries : un garde global
+// n'en crée qu'une seule pour tout le processus.
+if (!globalThis.__xeenAntiraidCleanupStarted) {
+    globalThis.__xeenAntiraidCleanupStarted = true;
+    const cleanupTimer = setInterval(() => {
+        AntiraidService.cleanupModuleCache();
+    }, 5 * 60_000);
+    if (cleanupTimer.unref) cleanupTimer.unref();
+}
 
 module.exports = AntiraidService;

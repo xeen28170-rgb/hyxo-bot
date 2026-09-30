@@ -9,7 +9,7 @@ module.exports = {
     description: 'Affiche les paramètres du bot sur le serveur',
     permissions: ['Administrator'],
     async run(client, message) {
-        const settings = await Guild.findOne({ guildId: message.guild.id });
+        const settings = message.guildSettings || await Guild.findOne({ guildId: message.guild.id });
         const l = settings?.logs || {};
         const am = settings?.automod || {};
 

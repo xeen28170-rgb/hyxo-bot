@@ -71,6 +71,7 @@ async function handleImprison(client, message, args) {
         const messages = {
             not_configured: '❌ Le système de prison n\'est pas configuré. Ouvrez le panneau avec `-prison` puis cliquez sur **Setup**.',
             role_missing: '❌ Le rôle de prison est introuvable sur ce serveur.',
+            administrator: 'Discord ne permet pas d\'isoler un administrateur ou le proprietaire du serveur. Retirez ses privileges avant de l\'emprisonner.',
             member_missing: '❌ Membre introuvable.',
             already_prisoner: `⛓️ ${member} est **déjà en prison**.`,
         };
@@ -149,7 +150,6 @@ async function openPrisonPanel(client, message) {
                 settings = await getGuildSettings(client, guildId, { create: false });
                 await interaction.editReply({
                     embeds: [EmbedHelper.success(`Messages MP ${!current ? '**activés**' : '**désactivés**'} pour les placements en prison.`)],
-                    flags: 64,
                 }).catch(() => {});
                 await refreshPanel(panelMessage, guild, settings);
                 return;
@@ -187,7 +187,11 @@ async function openPrisonPanel(client, message) {
 
             await interaction.update({ embeds: [buildPanelEmbed(guild, settings)], components: buildPanelRows(guild, settings) }).catch(() => {});
         } catch (error) {
-            try { await interaction.reply({ embeds: [EmbedHelper.error(`Erreur : ${error.message}`)], flags: 64 }); } catch { /* ignore */ }
+            // Le composant peut déjà être deferré (deferUpdate appelé plus haut) :
+            // reply n'est alors plus valable → on retombe sur followUp puis editReply.
+            const errReply = { embeds: [EmbedHelper.error(`Erreur : ${error.message}`)], flags: 64 };
+            try { await interaction.reply(errReply); }
+            catch { try { await interaction.followUp(errReply); } catch { /* ignore */ } }
         }
     });
 
@@ -297,13 +301,13 @@ function buildPanelRows(guild, settings) {
     rows.push(new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId('prison_edit_dm')
-            .setLabel('✏️ Message MP entrée')
+            .setLabel('Message MP entrée')
             .setStyle(ButtonStyle.Secondary)
             .setEmoji('📝')
             .setDisabled(!enabled),
         new ButtonBuilder()
             .setCustomId('prison_edit_release')
-            .setLabel('✏️ Message MP sortie')
+            .setLabel('Message MP sortie')
             .setStyle(ButtonStyle.Secondary)
             .setEmoji('🔓')
             .setDisabled(!enabled),

@@ -302,6 +302,7 @@ const Guild = {
             // qu'une fois par processus, pas à chaque commande.
             store[guildId] = deepMerge(store[guildId], makeDefault(guildId));
             normalizedGuilds.add(guildId);
+            scheduleSave(); // persister immédiatement les nouvelles valeurs par défaut
         }
         return attachSave(store[guildId]);
     },

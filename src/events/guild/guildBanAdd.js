@@ -14,7 +14,7 @@ module.exports = {
 
         const embed = EmbedHelper.info('🚫 Membre Banni', [
             `**Utilisateur:** ${ban.user.tag} (\`${ban.user.id}\`)`,
-            auditEntry?.executor ? `**Modérateur:** ${auditEntry.executor.tag} (\`${auditEntry.executor.id}\`)` : '',
+            auditEntry?.executorId ? `**Modérateur:** <@${auditEntry.executorId}> (\`${auditEntry.executorId}\`)` : '',
             `**Raison:** ${auditEntry?.reason || ban.reason || 'Aucune raison spécifiée'}`
         ].filter(Boolean).join('\n'), { color: 0xFF0000 });
 

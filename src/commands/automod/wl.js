@@ -3,15 +3,23 @@
 const Guild = require('../../models/Guild');
 const EmbedHelper = require('../../utils/embedBuilder');
 const { getGuildSettings, invalidateGuildSettings } = require('../../utils/guildSettings');
+const Helpers = require('../../utils/helpers');
+const { getAccessLevel, LEVEL } = require('../../utils/privateVoice');
 
 module.exports = {
     name: 'wl',
     aliases: ['whitelist', 'unwl'],
     category: 'automod',
     description: 'Gérer la whitelist antiraid du serveur (membres qui bypassent les protections).',
-    usage: '-wl list | add <id> | remove <id> | clear',
-    permissions: ['Administrator'],
+    usage: '-wl list | add <ID/@mention/rôle> | remove <ID/@mention/rôle> | clear',
     async run(client, message, args) {
+        const permissions = await getGuildSettings(client, message.guild.id, { create: false });
+        if (await getAccessLevel(client, message.member, permissions) < LEVEL.OWNER) {
+            return message.channel.send({ embeds: [EmbedHelper.error('Seuls les Owners et le proprietaire du bot peuvent gerer la WL.')] });
+        }
+        const invokedName = (message.content || '').trim().split(/\s+/)[0];
+        if (invokedName.endsWith('unwl')) args = ['remove', ...args];
+        else if (Helpers.resolveUserId(args[0]) || /^<@&\d{17,20}>$/.test(args[0] || '')) args = ['add', ...args];
         const sub = (args[0] || '').toLowerCase();
         const guildId = message.guild.id;
 
@@ -25,9 +33,13 @@ module.exports = {
         }
 
         if (sub === 'add' || sub === 'remove') {
-            const targetId = (args[1] || '').trim();
-            if (!targetId || !/^\d+$/.test(targetId)) {
-                return message.channel.send({ embeds: [EmbedHelper.error(`Usage: \`-wl ${sub} <ID>\``)] });
+            const targetArg = (args[1] || '').trim();
+            const role = Helpers.resolveRole(message.guild, targetArg);
+            const member = role ? null : await Helpers.resolveMember(message.guild, targetArg);
+            const rawId = Helpers.resolveUserId(targetArg);
+            const targetId = role?.id || member?.id || rawId;
+            if (!targetId) {
+                return message.channel.send({ embeds: [EmbedHelper.error(`Usage: \`-wl ${sub} <ID/@mention/rôle>\``)] });
             }
 
             const settings = await getGuildSettings(client, guildId, { create: false });

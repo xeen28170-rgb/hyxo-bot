@@ -3,7 +3,7 @@
 const Owner = require('../../models/Owner');
 const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
-const { getGuildSettings } = require('../../utils/guildSettings');
+const { getGuildSettings, invalidateGuildSettings } = require('../../utils/guildSettings');
 
 module.exports = {
     name: 'owner',
@@ -15,14 +15,13 @@ module.exports = {
         const Guild = require('../../models/Guild');
         const PermissionsHelper = require('../../utils/permissions');
         
-        const isCreator = PermissionsHelper.isCreator(message.author.id);
-        const isGuildOwner = PermissionsHelper.isGuildOwner(message.member);
+        const isCreator = PermissionsHelper.isBotOwner(client, message.author.id);
 
         const sub = args[0]?.toLowerCase();
 
         // ─── OWNER GLOBAL (créateur du bot uniquement) ───
         if (sub === 'global') {
-            if (!isCreator) return message.channel.send({ embeds: [EmbedHelper.error('Seul le créateur du bot peut gérer les privilèges globaux.')] });
+            if (!PermissionsHelper.isCreator(message.author.id) && !PermissionsHelper.isProprietaire(message.author.id)) return message.channel.send({ embeds: [EmbedHelper.error('Seul le créateur du bot peut gérer les privilèges globaux.')] });
             
             const action = args[1]?.toLowerCase();
             if (action === 'add') {
@@ -43,8 +42,8 @@ module.exports = {
             return message.channel.send({ embeds: [EmbedHelper.info('👑 Owners Globaux', owners.map(id => `<@${id}> (\`${id}\`)`).join('\n') || 'Aucun.', { color: 0xFF0000 })] });
         }
 
-        if (!isCreator && !isGuildOwner) {
-            return message.channel.send({ embeds: [EmbedHelper.error('Seul le propriétaire du serveur (👑) peut gérer les owners de ce serveur.')] });
+        if (!isCreator) {
+            return message.channel.send({ embeds: [EmbedHelper.error('Seul le proprietaire du bot peut gerer les Owners.')] });
         }
 
         const settings = message.guildSettings || await getGuildSettings(client, message.guild.id);
@@ -61,16 +60,17 @@ module.exports = {
                     return message.channel.send({ embeds: [EmbedHelper.error('Ce rôle est déjà owner.')] });
                 }
                 await Guild.updateOne({ guildId: message.guild.id }, { $addToSet: { ownerRoles: role.id } });
+                invalidateGuildSettings(client, message.guild.id);
                 return message.channel.send({ embeds: [EmbedHelper.success(`Le rôle **${role.name}** est maintenant owner de ce serveur.`)] });
             }
 
             // Sinon, chercher un utilisateur
             const user = await Helpers.resolveUser(client, target);
             if (!user) return message.channel.send({ embeds: [EmbedHelper.error('Utilisateur ou rôle invalide.')] });
-            if (user.id === message.guild.ownerId) return message.channel.send({ embeds: [EmbedHelper.error('Le propriétaire est déjà owner.')] });
             if (settings.owners?.includes(user.id)) return message.channel.send({ embeds: [EmbedHelper.error('Déjà owner.')] });
 
             await Guild.updateOne({ guildId: message.guild.id }, { $addToSet: { owners: user.id } });
+            invalidateGuildSettings(client, message.guild.id);
             return message.channel.send({ embeds: [EmbedHelper.success(`${user.tag} est maintenant owner de ce serveur.`)] });
         }
 
@@ -86,16 +86,18 @@ module.exports = {
                     return message.channel.send({ embeds: [EmbedHelper.error('Ce rôle n\'est pas owner.')] });
                 }
                 await Guild.updateOne({ guildId: message.guild.id }, { $pull: { ownerRoles: role.id } });
+                invalidateGuildSettings(client, message.guild.id);
                 return message.channel.send({ embeds: [EmbedHelper.success(`Le rôle **${role.name}** n'est plus owner de ce serveur.`)] });
             }
 
             // Sinon, chercher un utilisateur
-            const user = await Helpers.resolveUser(client, target);
-            if (!user) return message.channel.send({ embeds: [EmbedHelper.error('Utilisateur ou rôle invalide.')] });
-            if (!settings.owners?.includes(user.id)) return message.channel.send({ embeds: [EmbedHelper.error('Pas owner.')] });
+            const userId = Helpers.resolveUserId(target);
+            if (!userId) return message.channel.send({ embeds: [EmbedHelper.error('Utilisateur ou rôle invalide.')] });
+            if (!settings.owners?.includes(userId)) return message.channel.send({ embeds: [EmbedHelper.error('Pas owner.')] });
 
-            await Guild.updateOne({ guildId: message.guild.id }, { $pull: { owners: user.id } });
-            return message.channel.send({ embeds: [EmbedHelper.success(`${user.tag} n'est plus owner de ce serveur.`)] });
+            await Guild.updateOne({ guildId: message.guild.id }, { $pull: { owners: userId } });
+            invalidateGuildSettings(client, message.guild.id);
+            return message.channel.send({ embeds: [EmbedHelper.success(`<@${userId}> n'est plus owner de ce serveur.`)] });
         }
 
         // ─── LIST ───

@@ -22,10 +22,13 @@ module.exports = {
             new ButtonBuilder().setCustomId(`embed_title:${message.author.id}`).setLabel('Titre').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId(`embed_desc:${message.author.id}`).setLabel('Description').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId(`embed_color:${message.author.id}`).setLabel('Couleur').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`embed_image:${message.author.id}`).setLabel('Image').setStyle(ButtonStyle.Secondary),
+        );
+        const actions = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`embed_send:${message.author.id}`).setLabel('Envoyer').setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId(`embed_cancel:${message.author.id}`).setLabel('Annuler').setStyle(ButtonStyle.Danger),
         );
 
-        await message.channel.send({ embeds: [embed], components: [row] });
+        await message.channel.send({ embeds: [embed], components: [row, actions] });
     },
 };

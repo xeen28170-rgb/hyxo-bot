@@ -11,6 +11,7 @@ const Guild = require('../../models/Guild');
 const EmbedHelper = require('../../utils/embedBuilder');
 const { getGuildSettings, invalidateGuildSettings } = require('../../utils/guildSettings');
 const { updateStatsChannels, startStatsUpdater, stopStatsUpdater } = require('./statschannels');
+const { mapLimit } = require('../../utils/concurrency');
 
 const COUNTER_OPTIONS = [
     { key: 'serverNameId', label: 'Nom du serveur', emoji: '🏠', preview: stats => `🏠 ${stats.guildName}` },
@@ -84,6 +85,8 @@ async function openStatsPanel(client, message) {
             }
 
             if (customId === 'stats_counters' && interaction.isStringSelectMenu() && enabled) {
+                // Acquitte d'abord : la suppression de salons ci-dessous peut dépasser les 3s.
+                await interaction.deferUpdate();
                 const selected = interaction.values;
                 const updates = {};
                 for (const opt of COUNTER_OPTIONS) {
@@ -104,13 +107,18 @@ async function openStatsPanel(client, message) {
                 await Guild.updateOne({ guildId }, updates);
                 invalidateGuildSettings(client, guildId);
                 settings = await getGuildSettings(client, guildId, { create: false });
-                await interaction.update({ embeds: [buildStatsEmbed(guild, settings)], components: buildStatsRows(guild, settings) });
+                await interaction.editReply({ embeds: [buildStatsEmbed(guild, settings)], components: buildStatsRows(guild, settings) });
                 return;
             }
 
             await interaction.update({ embeds: [buildStatsEmbed(guild, settings)], components: buildStatsRows(guild, settings) });
         } catch (error) {
-            try { await interaction.reply({ embeds: [EmbedHelper.error(`Erreur : ${error.message}`)], flags: 64 }); } catch { /* ignore */ }
+            const notice = { embeds: [EmbedHelper.error(`Erreur : ${error.message}`)], flags: 64 };
+            try {
+                // Si le composant a déjà été acquitté (deferUpdate), reply n'est plus valable.
+                if (interaction.deferred || interaction.replied) await interaction.followUp(notice);
+                else await interaction.reply(notice);
+            } catch { /* ignore */ }
         }
     });
 
@@ -146,10 +154,10 @@ async function disableStats(client, guild) {
         if (ch.parentId === saved.categoryId) ids.add(ch.id);
     }
 
-    for (const id of ids) {
+    await mapLimit([...ids], async (id) => {
         const ch = guild.channels.cache.get(id);
         if (ch) await ch.delete('[Stats] Désactivation').catch(() => {});
-    }
+    }, 3);
     const category = guild.channels.cache.get(saved.categoryId);
     if (category) await category.delete('[Stats] Désactivation').catch(() => {});
 

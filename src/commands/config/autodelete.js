@@ -2,6 +2,7 @@
 
 const Guild = require('../../models/Guild');
 const EmbedHelper = require('../../utils/embedBuilder');
+const { getGuildSettings } = require('../../utils/guildSettings');
 
 module.exports = {
     name: 'autodelete',
@@ -35,7 +36,10 @@ module.exports = {
         }
 
         const key = `autodelete.${scope}`;
-        const value = isOff ? null : { target, duration: isValidDuration ? status : null };
+        const settings = await getGuildSettings(client, message.guild.id);
+        const previous = settings.autodelete?.[scope];
+        const value = previous?.target ? { [previous.target]: { duration: previous.duration } } : { ...previous };
+        value[target] = isOff ? null : { duration: isValidDuration ? status : null };
 
         await Guild.updateOne({ guildId: message.guild.id }, { [key]: value });
         client.cache.invalidateGuild(message.guild.id);

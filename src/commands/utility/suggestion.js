@@ -1,5 +1,7 @@
 'use strict';
 
+const { getEmoji } = require('../../config/emojis');
+
 const EmbedHelper = require('../../utils/embedBuilder');
 const { getGuildSettings } = require('../../utils/guildSettings');
 
@@ -37,8 +39,8 @@ module.exports = {
         embed.setFooter({ text: `ID: ${message.author.id}` });
 
         const msg = await channel.send({ embeds: [embed] });
-        await msg.react('✅');
-        await msg.react('❌');
+        await msg.react(getEmoji('SUCCESS'));
+        await msg.react(getEmoji('ERROR'));
 
         message.channel.send({ embeds: [EmbedHelper.success('Votre suggestion a été envoyée !')] });
     },

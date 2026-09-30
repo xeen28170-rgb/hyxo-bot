@@ -3,6 +3,7 @@
 const Guild = require('../../models/Guild');
 const Ticket = require('../../models/Ticket');
 const TicketService = require('../../services/ticketService');
+const Logger = require('../../utils/logger');
 const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
 const { getGuildSettings, invalidateGuildSettings } = require('../../utils/guildSettings');
@@ -152,85 +153,87 @@ async function sendTicketAdminPanel(client, message) {
     const collector = panelMessage.createMessageComponentCollector({ time: 10 * 60 * 1000 });
 
     collector.on('collect', async (interaction) => {
-        if (interaction.user.id !== message.author.id) {
-            await interaction.reply({
-                embeds: [EmbedHelper.error('Seul l\'auteur de la commande peut utiliser ce panneau.')],
-                flags: 64,
-            });
-            return;
-        }
-
-        const customId = interaction.customId;
-
-        if (customId === 'ticket_panel_send_here') {
-            await interaction.deferUpdate().catch(() => {});
-            await Guild.updateOne({ guildId }, { 'tickets.enabled': true });
-            invalidateGuildSettings(client, guildId);
-            settings = await getGuildSettings(client, guildId);
-            await TicketService.sendPanel(message.channel, settings);
-            await updateTicketPanel(panelMessage, message, settings);
-            await interaction.followUp({ embeds: [EmbedHelper.success('✅ Panneau de création de ticket envoyé ici.')], flags: 64 }).catch(() => {});
-            return;
-        }
-
-        if (customId === 'ticket_panel_create_category') {
-            await interaction.deferUpdate().catch(() => {});
-            if (!message.guild.members.me.permissions.has(PermissionFlagsBits.ManageChannels)) {
-                await interaction.followUp({ embeds: [EmbedHelper.error('❌ Je n\'ai pas la permission `Gérer les salons`.')], flags: 64 }).catch(() => {});
+        try {
+            if (interaction.user.id !== message.author.id) {
+                await interaction.reply({
+                    embeds: [EmbedHelper.error('Seul l\'auteur de la commande peut utiliser ce panneau.')],
+                    flags: 64,
+                }).catch(() => {});
                 return;
             }
 
-            let category = message.guild.channels.cache.find(channel => channel.type === ChannelType.GuildCategory && channel.name === 'Tickets');
-            if (!category) {
-                category = await message.guild.channels.create({
-                    name: 'Tickets',
-                    type: ChannelType.GuildCategory,
-                    reason: `Creation auto categorie tickets par ${message.author.tag}`,
-                    permissionOverwrites: [
-                        { id: message.guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
-                    ],
-                });
+            const customId = interaction.customId;
+
+            if (customId === 'ticket_panel_send_here') {
+                await interaction.deferUpdate().catch(() => {});
+                await Guild.updateOne({ guildId }, { 'tickets.enabled': true });
+                invalidateGuildSettings(client, guildId);
+                settings = await getGuildSettings(client, guildId);
+                await TicketService.sendPanel(message.channel, settings);
+                await updateTicketPanel(panelMessage, message, settings);
+                await interaction.followUp({ embeds: [EmbedHelper.success('✅ Panneau de création de ticket envoyé ici.')] }).catch(() => {});
+                return;
             }
 
-            await Guild.updateOne({ guildId }, { 'tickets.enabled': true, 'tickets.category': category.id });
-            invalidateGuildSettings(client, guildId);
+            if (customId === 'ticket_panel_create_category') {
+                await interaction.deferUpdate().catch(() => {});
+                if (!message.guild.members.me.permissions.has(PermissionFlagsBits.ManageChannels)) {
+                    await interaction.followUp({ embeds: [EmbedHelper.error('❌ Je n\'ai pas la permission `Gérer les salons`.')] }).catch(() => {});
+                    return;
+                }
+
+                let category = message.guild.channels.cache.find(channel => channel.type === ChannelType.GuildCategory && channel.name === 'Tickets');
+                if (!category) {
+                    category = await message.guild.channels.create({
+                        name: 'Tickets',
+                        type: ChannelType.GuildCategory,
+                        reason: `Creation auto categorie tickets par ${message.author.tag}`,
+                        permissionOverwrites: [
+                            { id: message.guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
+                        ],
+                    });
+                }
+
+                await Guild.updateOne({ guildId }, { 'tickets.enabled': true, 'tickets.category': category.id });
+                invalidateGuildSettings(client, guildId);
+                settings = await getGuildSettings(client, guildId);
+                await updateTicketPanel(panelMessage, message, settings);
+                await interaction.followUp({ embeds: [EmbedHelper.success(`✅ Catégorie tickets configurée: **${category.name}**`) ]}).catch(() => {});
+                return;
+            }
+
+            // On accuse réception tout de suite : les opérations DB ci-dessous peuvent
+            // dépasser la fenêtre de 3s d'un jeton d'interaction et provoquaient
+            // l'erreur "Unknown interaction" (10062) sur interaction.update().
+            await interaction.deferUpdate().catch(() => {});
+
+            const updates = {};
+            if (customId === 'ticket_panel_toggle') {
+                updates['tickets.enabled'] = !settings.tickets?.enabled;
+            } else if (customId === 'ticket_panel_category' && interaction.isChannelSelectMenu()) {
+                updates['tickets.category'] = interaction.values[0];
+                updates['tickets.enabled'] = true;
+            } else if (customId === 'ticket_panel_log' && interaction.isChannelSelectMenu()) {
+                updates['tickets.logChannel'] = interaction.values[0];
+                updates['logs.ticketLogs'] = interaction.values[0];
+                updates['logs.enabled'] = true;
+            } else if (customId === 'ticket_panel_roles' && interaction.isRoleSelectMenu()) {
+                updates['tickets.supportRole'] = interaction.values;
+            }
+            // (ticket_panel_refresh n'a besoin d'aucune mise à jour, juste du re-fetch ci-dessous)
+
+            if (Object.keys(updates).length) {
+                await Guild.updateOne({ guildId }, updates);
+                invalidateGuildSettings(client, guildId);
+            }
+
             settings = await getGuildSettings(client, guildId);
-            await updateTicketPanel(panelMessage, message, settings);
-            await interaction.followUp({ embeds: [EmbedHelper.success(`✅ Catégorie tickets configurée: **${category.name}**`)], flags: 64 }).catch(() => {});
-            return;
+            // On édite le message du panneau directement plutôt que via interaction.update(),
+            // qui dépend du jeton d'interaction déjà consommé par deferUpdate() ci-dessus.
+            await updateTicketPanel(panelMessage, message, settings).catch(() => {});
+        } catch (err) {
+            Logger.error('Erreur panneau tickets:', { message: err.message, stack: err.stack });
         }
-
-        const updates = {};
-        if (customId === 'ticket_panel_toggle') {
-            updates['tickets.enabled'] = !settings.tickets?.enabled;
-        } else if (customId === 'ticket_panel_refresh') {
-            settings = await getGuildSettings(client, guildId);
-            await interaction.update({
-                embeds: [buildTicketPanelEmbed(message.guild, settings)],
-                components: buildTicketPanelRows(settings),
-            });
-            return;
-        } else if (customId === 'ticket_panel_category' && interaction.isChannelSelectMenu()) {
-            updates['tickets.category'] = interaction.values[0];
-            updates['tickets.enabled'] = true;
-        } else if (customId === 'ticket_panel_log' && interaction.isChannelSelectMenu()) {
-            updates['tickets.logChannel'] = interaction.values[0];
-            updates['logs.ticketLogs'] = interaction.values[0];
-            updates['logs.enabled'] = true;
-        } else if (customId === 'ticket_panel_roles' && interaction.isRoleSelectMenu()) {
-            updates['tickets.supportRole'] = interaction.values;
-        }
-
-        if (Object.keys(updates).length) {
-            await Guild.updateOne({ guildId }, updates);
-            invalidateGuildSettings(client, guildId);
-        }
-
-        settings = await getGuildSettings(client, guildId);
-        await interaction.update({
-            embeds: [buildTicketPanelEmbed(message.guild, settings)],
-            components: buildTicketPanelRows(settings),
-        });
     });
 
     collector.on('end', async () => {

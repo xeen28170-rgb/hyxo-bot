@@ -1,6 +1,7 @@
 'use strict';
 
 const EmbedHelper = require('../../utils/embedBuilder');
+const { mapLimit } = require('../../utils/concurrency');
 
 module.exports = {
     name: 'unmuteall',
@@ -26,16 +27,10 @@ module.exports = {
 
         const loadingMsg = await message.channel.send({ embeds: [EmbedHelper.info('🔊 Démutage en cours...', `Retrait du rôle mute pour **${muted.size}** membres...`)] });
 
-        let success = 0;
-        let failed = 0;
-        for (const [, member] of muted) {
-            try {
-                await member.roles.remove(muteRoleId, `Unmuteall par ${message.author.username}`);
-                success++;
-            } catch {
-                failed++;
-            }
-        }
+        const results = await mapLimit([...muted.values()], (member) =>
+            member.roles.remove(muteRoleId, `Unmuteall par ${message.author.username}`), 5);
+        const success = results.filter(r => r.ok).length;
+        const failed = results.length - success;
 
         await loadingMsg.edit({ embeds: [EmbedHelper.success(`✅ **${success}** membres démutés.${failed > 0 ? ` (${failed} échecs)` : ''}`)] });
     },

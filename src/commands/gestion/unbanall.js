@@ -1,6 +1,7 @@
 'use strict';
 
 const EmbedHelper = require('../../utils/embedBuilder');
+const { mapLimit } = require('../../utils/concurrency');
 
 module.exports = {
     name: 'unbanall',
@@ -13,13 +14,11 @@ module.exports = {
 
         await message.channel.send({ embeds: [EmbedHelper.info('🔨 Débannissement...', `Débannissement de **${bans.size}** membres en cours.`)] });
 
-        let count = 0;
-        for (const ban of bans.values()) {
-            await message.guild.members.unban(ban.user.id).catch(() => {});
-            count++;
-        }
+        const results = await mapLimit([...bans.values()], (ban) => message.guild.members.unban(ban.user.id), 5);
+        const count = results.filter(r => r.ok).length;
+        const failed = results.length - count;
 
-        await message.channel.send({ embeds: [EmbedHelper.success(`✅ **${count}** membres ont été débannis.`)] });
+        const report = `**${count}** membres débannis. **${failed}** échecs.`;
+        await message.channel.send({ embeds: [failed ? EmbedHelper.warning(report) : EmbedHelper.success(report)] });
     },
 };
-

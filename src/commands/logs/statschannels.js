@@ -32,13 +32,11 @@ function isStatsChannelId(statsChannels, channelId) {
 }
 
 async function computeStats(guild, { forceMemberFetch = false } = {}) {
-    let online = 0;
-    try {
-        const members = await guild.members.fetch({ force: forceMemberFetch });
-        online = members.filter((m) => m.presence?.status === 'online').size;
-    } catch {
-        online = guild.presences?.cache?.filter((p) => p.status === 'online').size || 0;
-    }
+    // Les statuts sont tenus à jour en mémoire par la passerelle (intent GuildPresences) :
+    // inutile de télécharger toute la liste des membres à chaque mise à jour (lent et limité
+    // par Discord sur les gros serveurs). Téléchargement complet seulement à la configuration.
+    if (forceMemberFetch) await guild.members.fetch().catch(() => null);
+    const online = guild.presences?.cache?.filter((p) => p.status === 'online').size || 0;
 
     let voice = 0;
     for (const [, ch] of guild.channels.cache) {

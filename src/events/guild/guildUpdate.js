@@ -19,7 +19,8 @@ module.exports = {
                 if (settings?.antidown?.enabled) {
                     const logs = await newGuild.fetchAuditLogs({ type: AuditLogEvent.GuildUpdate, limit: 5 }).catch(() => null);
                     const entry = logs?.entries.find(e =>
-                        Date.now() - e.createdTimestamp < 15_000
+                        Date.now() - e.createdTimestamp < 15_000 &&
+                        e.changes?.some(c => c.key === 'vanity_url_code')
                     );
                     if (entry) await AntiraidService.handleGuildUpdate(client, newGuild, entry, settings);
                 }

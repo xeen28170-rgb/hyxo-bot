@@ -5,8 +5,7 @@ const PermissionsHelper = require('../../utils/permissions');
 const { getGuildSettings } = require('../../utils/guildSettings');
 const { resolveLeashTarget } = require('../../utils/leashHelper');
 const LeashService = require('../../services/leashService');
-const { isWhitelisted } = require('../../utils/whitelist');
-const { canLeashTarget } = require('../../utils/privateVoice');
+const { canLeashTarget, getAccessLevel, LEVEL } = require('../../utils/privateVoice');
 
 module.exports = {
     name: 'laisse',
@@ -29,7 +28,7 @@ module.exports = {
         if (target.user.bot) {
             return message.channel.send({ embeds: [EmbedHelper.error('❌ Impossible de laisser un bot.')] });
         }
-        if (target.id === message.author.id) {
+        if (target.id === message.author.id && !PermissionsHelper.isBotOwner(client, message.author.id)) {
             return message.channel.send({ embeds: [EmbedHelper.error('❌ Vous ne pouvez pas vous mettre en laisse vous-même.')] });
         }
         if (!await canLeashTarget(client, message.member, target, settings)) {
@@ -61,11 +60,5 @@ module.exports = {
 };
 
 async function canUseLeash(client, message, settings) {
-    if (PermissionsHelper.isBotOwner(client, message.author.id)) return true;
-    if (!settings) return false;
-    if (message.guild.ownerId === message.author.id) return true;
-    if (Array.isArray(settings.owners) && settings.owners.includes(message.author.id)) return true;
-    if (Array.isArray(settings.ownerRoles) && settings.ownerRoles.some(roleId => message.member.roles.cache.has(roleId))) return true;
-    const wl = settings.antiraid?.whitelist || [];
-    return isWhitelisted(message.member, message.author.id, wl);
+    return await getAccessLevel(client, message.member, settings) >= LEVEL.WL;
 }

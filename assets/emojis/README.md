@@ -1,29 +1,21 @@
-# Emojis du bot
+# Emojis du bot — pack Xeen 3D
 
-Dépose ici les images des emojis personnalisés du bot.
+Les images de ce dossier sont **générées** par `scripts/generateEmojis.js`
+(pictogrammes Tabler Icons, licence MIT, mis en relief 3D : dégradé,
+extrusion, ombre, reflet et halo). Ne les modifie pas à la main.
 
-## Règles de nommage
+## Modifier / ajouter un emoji
 
-Le nom du fichier (sans extension) doit correspondre à une clé de
-`src/config/emojis.js`, **en minuscule**. Exemples :
-
-- `ban.png`      → remplit la clé `BAN`
-- `success.png`  → remplit la clé `SUCCESS`
-- `ticket.gif`   → remplit la clé `TICKET` (animé, format `.gif` accepté)
-
-Formats acceptés : `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`
-Taille conseillée : 256x256px, max 256 Ko.
-
-## Upload
-
-Une fois tes images placées ici :
+1. Édite `MANIFEST` dans `scripts/generateEmojis.js` (clé → icône Tabler + couleur).
+2. Ajoute la clé dans `EMOJIS` et `FALLBACK` de `src/config/emojis.js`.
+3. Régénère puis upload :
 
 ```bash
+node scripts/generateEmojis.js
 node scripts/uploadEmojis.js
 ```
 
-Le script upload chaque image comme "Application Emoji" (propre au bot,
-utilisable sur tous les serveurs) et met à jour automatiquement
-`src/config/emojis.js` avec les IDs générés.
-
-Relancer le script plus tard ne re-upload pas les emojis déjà présents.
+L'upload crée des "Application Emojis" (nommés `x_<clé>`, propres au bot)
+et écrit leurs IDs dans `src/config/emojis.js`. Un emoji déjà présent sous
+le même nom est réutilisé : pour changer son image, supprime-le d'abord
+dans le Developer Portal (onglet Emojis de l'application).

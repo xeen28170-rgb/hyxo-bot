@@ -32,6 +32,13 @@ module.exports = {
         const translations = await fs.readJson(filePath);
 
         const keys = key.split('.');
+        for (const k of keys) {
+            if (!k) return message.channel.send({ embeds: [EmbedHelper.error('Clé invalide (segment vide).')] });
+            if (['__proto__', 'constructor', 'prototype'].includes(k)) {
+                return message.channel.send({ embeds: [EmbedHelper.error('Clé invalide (segment réservé).')] });
+            }
+        }
+
         let current = translations;
         for (let i = 0; i < keys.length - 1; i++) {
             if (!current[keys[i]] || typeof current[keys[i]] !== 'object') {

@@ -1,6 +1,7 @@
 'use strict';
 
 const EmbedHelper = require('../../utils/embedBuilder');
+const { mapLimit } = require('../../utils/concurrency');
 
 module.exports = {
     name: 'unlockall',
@@ -11,9 +12,8 @@ module.exports = {
         const channels = message.guild.channels.cache.filter(c => c.type === 0);
         await message.channel.send({ embeds: [EmbedHelper.info('🔓 Déverrouillage...', `Déverrouillage de **${channels.size}** salons en cours.`)] });
 
-        for (const ch of channels.values()) {
-            await ch.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: null }).catch(() => {});
-        }
+        await mapLimit([...channels.values()], (ch) =>
+            ch.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: null }).catch(() => {}), 5);
 
         message.channel.send({ embeds: [EmbedHelper.success('✅ Tous les salons ont été déverrouillés.')] });
     },

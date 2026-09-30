@@ -2,8 +2,8 @@
 const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
 const PermissionsHelper = require('../../utils/permissions');
-const Logger = require('../../utils/logger');
-const { safeSetTimeout } = require('../../utils/safeTimeout');
+const ModerationService = require('../../services/moderationService');
+const Sanction = require('../../models/Sanction');
 
 module.exports = {
     name: 'cmute',
@@ -31,15 +31,11 @@ module.exports = {
 
         await member.voice.setMute(true, `${message.author.tag} | ${reason}`);
 
-        if (duration) {
-            safeSetTimeout(async () => {
-                try {
-                    const m = await message.guild.members.fetch(member.id).catch(() => null);
-                    if (m?.voice.serverMute) await m.voice.setMute(false, 'Cmute expiré').catch(() => {});
-                } catch (err) {
-                    Logger.error('cmute timeout error:', err);
-                }
-            }, duration);
+        const previous = await Sanction.find({ guildId: message.guild.id, userId: member.id, active: true });
+        await ModerationService.createSanction({ guildId: message.guild.id, userId: member.id, moderatorId: message.author.id,
+            type: duration ? 'tempcmute' : 'cmute', duration, reason });
+        for (const sanction of previous.filter(s => ['cmute', 'tempcmute'].includes(s.type))) {
+            await Sanction.updateOne({ _id: sanction._id }, { active: false });
         }
 
         const msg = message.t('moderation.cmute.success', { user: member.user.tag, channel: member.voice.channel.name });

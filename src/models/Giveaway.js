@@ -58,6 +58,7 @@ module.exports = {
     findOne: async (query) => {
         await ensureLoaded();
         return Object.values(store).find(g =>
+            (query._id === undefined || g._id === query._id) &&
             (!query.guildId || g.guildId === query.guildId) &&
             (!query.messageId || g.messageId === query.messageId) &&
             (query.ended === undefined || g.ended === query.ended)
@@ -75,7 +76,9 @@ module.exports = {
 
     updateOne: async (query, update) => {
         await ensureLoaded();
-        const doc = Object.values(store).find(g => query._id ? g._id === query._id : g.guildId === query.guildId);
+        const doc = Object.values(store).find(g =>
+            Object.entries(query).every(([k, v]) => g[k] === v)
+        );
         if (doc) {
             Object.assign(doc, update.$set || update);
             scheduleSave();

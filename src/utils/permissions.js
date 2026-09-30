@@ -32,7 +32,7 @@ const PermissionsHelper = {
      * Vérifier si un utilisateur est propriétaire du bot (ou créateur)
      */
     isBotOwner(client, userId) {
-        return CREATOR_IDS.has(userId) || client.owners?.has(userId) || client.botOwners?.has(userId);
+        return this.isProprietaire(userId) || CREATOR_IDS.has(userId) || client.owners?.has(userId) || client.botOwners?.has(userId);
     },
 
     /**

@@ -4,6 +4,8 @@ const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
 const TempRole = require('../../models/TempRole');
 const PermissionsHelper = require('../../utils/permissions');
+const { canManageRankRole } = require('../../utils/privateVoice');
+const { getGuildSettings } = require('../../utils/guildSettings');
 
 module.exports = {
     name: 'untemprole',
@@ -20,6 +22,8 @@ module.exports = {
             return message.channel.send({ embeds: [EmbedHelper.error(`❌ Usage: \`${prefix}untemprole ${this.usage}\``)] });
         }
 
+        const settings = message.guildSettings || await getGuildSettings(client, message.guild.id);
+        if (!await canManageRankRole(client, message.member, role, settings)) return message.channel.send({ embeds: [EmbedHelper.error('Votre rang ne permet pas de gerer ce role Owner/WL.')] });
         if (!member.roles.cache.has(role.id)) {
             return message.channel.send({ embeds: [EmbedHelper.error(`Ce membre n'a pas le rôle **${role.name}**.`)] });
         }
@@ -30,9 +34,7 @@ module.exports = {
             return message.channel.send({ embeds: [EmbedHelper.error('Le rôle du bot doit être placé au-dessus du rôle temporaire.')] });
         }
 
-        await member.roles.remove(role, `Untemprole par ${message.author.tag}`).catch(err => {
-            return message.channel.send({ embeds: [EmbedHelper.error(`Erreur: ${err.message}`)] });
-        });
+        await member.roles.remove(role, `Untemprole par ${message.author.tag}`);
 
         const deleted = await TempRole.remove({ guildId: message.guild.id, userId: member.id, roleId: role.id });
 

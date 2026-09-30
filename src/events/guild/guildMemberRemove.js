@@ -18,16 +18,17 @@ module.exports = {
 
         await wait(1_000);
 
-        const banAudit = await LogDispatcher.findRecentAuditEntry(guild, AuditLogEvent.MemberBanAdd, member.id, 20_000);
-        if (LogDispatcher.isSelfAuditEntry(client, banAudit)) return;
+        // Les deux recherches en parallèle (souvent servies depuis la mémoire, sans appel réseau).
+        const [banAudit, kickAudit] = await Promise.all([
+            LogDispatcher.findRecentAuditEntry(guild, AuditLogEvent.MemberBanAdd, member.id, 20_000),
+            LogDispatcher.findRecentAuditEntry(guild, AuditLogEvent.MemberKick, member.id, 20_000),
+        ]);
         if (banAudit) return;
-
-        const kickAudit = await LogDispatcher.findRecentAuditEntry(guild, AuditLogEvent.MemberKick, member.id, 20_000);
         if (LogDispatcher.isSelfAuditEntry(client, kickAudit)) return;
         if (kickAudit) {
             const kickEmbed = EmbedHelper.info('👢 Membre expulsé', [
                 `**Utilisateur:** ${member.user.tag} (\`${member.id}\`)`,
-                kickAudit.executor ? `**Modérateur:** ${kickAudit.executor.tag} (\`${kickAudit.executor.id}\`)` : '',
+                kickAudit.executorId ? `**Modérateur:** <@${kickAudit.executorId}> (\`${kickAudit.executorId}\`)` : '',
                 `**Raison:** ${kickAudit.reason || 'Aucune raison spécifiée'}`,
             ].filter(Boolean).join('\n'), { color: 0xFF9500 })
                 .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))

@@ -6,6 +6,7 @@ const EmbedHelper = require('../utils/embedBuilder');
 const Helpers = require('../utils/helpers');
 const LogDispatcher = require('../utils/logDispatcher');
 const { getGuildSettings } = require('../utils/guildSettings');
+const { withKey } = require('../utils/keyedQueue');
 
 const ModerationService = {
     /**
@@ -34,37 +35,20 @@ const ModerationService = {
             LogDispatcher.markModerationAction(guild.id, sanction.type, target.id);
         }
 
-        const actionEmojis = {
-            warn: '⚠️', mute: '🔇', tempmute: '🔇', unmute: '🔊',
-            kick: '👢', ban: '🔨', tempban: '🔨', unban: '✅',
-            derank: '📉', addrole: '➕', delrole: '➖',
-            lock: '🔒', unlock: '🔓', hide: '🙈', unhide: '👁️',
-            clear: '🗑️', cmute: '🔇', tempcmute: '🔇', uncmute: '🔊',
-        };
-
-        const actionColors = {
-            warn: 0xFEE75C, mute: 0xFF6B6B, tempmute: 0xFF6B6B,
-            unmute: 0x57F287, kick: 0xFF9500, ban: 0xED4245,
-            tempban: 0xED4245, unban: 0x57F287, derank: 0xFF6B6B,
-            addrole: 0x57F287, delrole: 0xFF6B6B,
-            lock: 0xFF6B6B, unlock: 0x57F287, hide: 0xFF6B6B, unhide: 0x57F287,
-            clear: 0xFEE75C, cmute: 0xFF6B6B, uncmute: 0x57F287,
-        };
-
-        const emoji = actionEmojis[sanction.type] || '⚡';
-        const color = actionColors[sanction.type] || 0x5865F2;
-
         const embed = EmbedHelper.moderation({
-            action: `${emoji} ${sanction.type.toUpperCase()}`,
+            action: sanction.type,
             user: target,
             moderator,
             reason: sanction.reason,
             duration: sanction.duration ? Helpers.formatDuration(sanction.duration) : null,
             caseId: sanction.caseId,
-            color,
         });
 
-        await LogDispatcher.moderationAction(guild, sanction.type, embed);
+        // Non bloquant : les commandes de modération (ban, mute, kick, warn…) attendaient ce
+        // message dans le salon de logs avant de confirmer à l'utilisateur.
+        Promise.resolve(LogDispatcher.moderationAction(guild, sanction.type, embed)).catch(error => {
+            Logger.error('[ModLog] Envoi du log de modération impossible:', { message: error.message });
+        });
     },
 
     /**
@@ -109,29 +93,53 @@ const ModerationService = {
      * Traiter les sanctions expirées (appelé par cron)
      */
     async processExpired(client) {
+        return withKey('sanctions-expiration', () => this.expirePending(client));
+    },
+    async expirePending(client) {
         const expired = (await Sanction.getExpired()).slice(0, 50);
 
         for (const sanction of expired) {
             try {
+                const latest = await Sanction.findOne({ _id: sanction._id });
+                if (!latest?.active) continue;
                 const guild = client.guilds.cache.get(sanction.guildId);
                 if (!guild) {
-                    await Sanction.updateOne({ _id: sanction._id }, { $set: { active: false } });
                     continue;
                 }
 
                 const settings = await getGuildSettings(client, sanction.guildId, { create: false });
+                const group = ['mute', 'tempmute'].includes(sanction.type) ? ['mute', 'tempmute']
+                    : ['ban', 'tempban'].includes(sanction.type) ? ['ban', 'tempban'] : ['cmute', 'tempcmute'];
+                const active = await Sanction.find({ guildId: sanction.guildId, userId: sanction.userId, active: true });
+                if (active.some(s => group.includes(s.type) && s._id > sanction._id)) {
+                    await Sanction.updateOne({ _id: sanction._id }, { active: false });
+                    continue;
+                }
 
                 if (sanction.type === 'tempmute' || sanction.type === 'mute') {
-                    const muteRole = settings?.moderation?.muteRole;
-                    if (muteRole) {
-                        const member = await guild.members.fetch(sanction.userId).catch(() => null);
+                    const muteRole = sanction.metadata?.muteRoleId || settings?.moderation?.muteRole;
+                    if (!(sanction.metadata?.useTimeout ?? settings?.moderation?.useTimeout) && !muteRole) continue;
+                    if (muteRole && !(sanction.metadata?.useTimeout ?? settings?.moderation?.useTimeout)) {
+                        const member = await guild.members.fetch(sanction.userId).catch(error => {
+                            if (error.code === 10007) return null;
+                            throw error;
+                        });
                         if (member) {
-                            await member.roles.remove(muteRole, 'Mute expiré automatiquement').catch(() => {});
+                            await member.roles.remove(muteRole, 'Mute expiré automatiquement');
                         }
                     }
                 } else if (sanction.type === 'tempban') {
                     LogDispatcher.markModerationAction(guild.id, 'unban', sanction.userId);
-                    await guild.members.unban(sanction.userId, 'Ban temporaire expiré').catch(() => {});
+                    await guild.members.unban(sanction.userId, 'Ban temporaire expiré').catch(error => {
+                        if (error.code !== 10026) throw error;
+                    });
+                } else if (sanction.type === 'tempcmute') {
+                    const member = await guild.members.fetch(sanction.userId).catch(error => {
+                        if (error.code === 10007) return null;
+                        throw error;
+                    });
+                    if (member && !member.voice.channelId) continue;
+                    if (member?.voice.serverMute) await member.voice.setMute(false, 'Cmute expire');
                 }
 
                 await Sanction.updateOne({ _id: sanction._id }, { $set: { active: false } });

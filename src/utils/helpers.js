@@ -5,6 +5,11 @@ const ms = require('ms');
 const moment = require('moment');
 
 const Helpers = {
+    resolveUserId(input) {
+        if (typeof input !== 'string') return null;
+        const match = input.trim().match(/^(?:<@!?(\d{17,20})>|(\d{17,20}))$/);
+        return match ? (match[1] || match[2]) : null;
+    },
     /**
      * Parser une durée en ms (ex: "10m" → 600000)
      */
@@ -49,9 +54,8 @@ const Helpers = {
      */
     async resolveUser(client, input, guild) {
         if (!input || typeof input !== 'string') return null;
-        const mentionMatch = input.match(/^<@!?(\d+)>$/);
-        const id = mentionMatch ? mentionMatch[1] : input.trim();
-        if (!/^\d{17,20}$/.test(id)) return null;
+        const id = Helpers.resolveUserId(input);
+        if (!id) return null;
 
         try {
             if (guild) {
@@ -70,10 +74,9 @@ const Helpers = {
      */
     async resolveMember(guild, input) {
         if (!input || typeof input !== 'string') return null;
-        const mentionMatch = input.match(/^<@!?(\d+)>$/);
-        const id = mentionMatch ? mentionMatch[1] : input;
+        const id = Helpers.resolveUserId(input);
 
-        if (/^\d+$/.test(id)) {
+        if (id) {
             return guild.members.cache.get(id)
                 || await guild.members.fetch(id).catch(() => null);
         }

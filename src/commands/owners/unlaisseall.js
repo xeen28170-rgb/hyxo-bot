@@ -2,7 +2,9 @@
 
 const EmbedHelper = require('../../utils/embedBuilder');
 const LeashService = require('../../services/leashService');
-const PermissionsHelper = require('../../utils/permissions');
+const { getAccessLevel, LEVEL } = require('../../utils/privateVoice');
+const { getGuildSettings } = require('../../utils/guildSettings');
+const { mapLimit } = require('../../utils/concurrency');
 
 module.exports = {
     name: 'unlaisseall',
@@ -11,17 +13,24 @@ module.exports = {
     usage: '-unlaisseall',
     ownerOnly: false,
     async run(client, message) {
-        const isBotOwner = PermissionsHelper.isBotOwner(client, message.author.id);
-        const isGuildOwner = message.guild.ownerId === message.author.id;
-        const isServerOwner = message.guildSettings?.owners?.includes(message.author.id);
-        const hasOwnerRole = message.guildSettings?.ownerRoles?.some(roleId => message.member.roles.cache.has(roleId));
+        const settings = message.guildSettings || await getGuildSettings(client, message.guild.id);
+        const level = await getAccessLevel(client, message.member, settings);
+        const isBotOwner = level === LEVEL.BOT_OWNER;
 
-        if (!isBotOwner && !isGuildOwner && !isServerOwner && !hasOwnerRole) {
+        if (level < LEVEL.OWNER) {
             return message.channel.send({ embeds: [EmbedHelper.error('❌ Vous devez être owner du serveur ou du bot pour utiliser cette commande.')] });
         }
 
         const leashes = await LeashService.listLeashes();
-        if (!leashes.length) {
+
+        // Une action globale (tous serveurs confondus) n'est autorisée qu'au owner du bot.
+        // Un simple owner de serveur ne doit pouvoir libérer que les laisses impliquant
+        // SON serveur (le pseudo y est restauré, pas ailleurs).
+        const filtered = isBotOwner
+            ? leashes
+            : leashes.filter(l => (l.guildIds || []).includes(message.guild.id));
+
+        if (!filtered.length) {
             return message.channel.send({ embeds: [EmbedHelper.info('🐕 Libération', 'Aucune personne tenue en laisse pour le moment.')] });
         }
 
@@ -29,16 +38,16 @@ module.exports = {
         let failed = 0;
         const errors = [];
 
-        for (const leash of leashes) {
+        await mapLimit(filtered, async (leash) => {
             try {
                 const target = { id: leash.userId };
-                await LeashService.stopLeash(client, target, null);
+                await LeashService.stopLeash(client, target, isBotOwner ? null : message.guild.id);
                 success++;
             } catch (err) {
                 failed++;
                 errors.push(`<@${leash.userId}> : ${err.message || err}`);
             }
-        }
+        }, 3);
 
         if (failed === 0) {
             return message.channel.send({

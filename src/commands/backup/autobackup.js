@@ -19,6 +19,7 @@ module.exports = {
 
         const key = type === 'emoji' ? 'autobackup.emojiInterval' : 'autobackup.serverInterval';
         await Guild.updateOne({ guildId: message.guild.id }, { [key]: days });
+        client.cache?.invalidateGuild?.(message.guild.id);
 
         const label = type === 'emoji' ? 'émojis' : 'serveur';
         await message.channel.send({ embeds: [EmbedHelper.success(`La backup automatique des **${label}** a été configurée tous les **${days} jour(s)**.`)] });

@@ -67,12 +67,27 @@ module.exports = {
 
     findOne: async (query) => {
         await ensureLoaded();
-        return store.find(s =>
-            (!query.guildId || s.guildId === query.guildId) &&
-            (!query.userId || s.userId === query.userId) &&
-            (query.active === undefined || s.active === query.active) &&
-            (query.expiresAt === undefined || (s.expiresAt && new Date(s.expiresAt) <= new Date() && s.active))
-        ) || null;
+        return store.find(s => {
+            if (query._id !== undefined && s._id !== query._id) return false;
+            if (query.type !== undefined && s.type !== query.type) return false;
+            if (query.guildId !== undefined && s.guildId !== query.guildId) return false;
+            if (query.userId !== undefined && s.userId !== query.userId) return false;
+            if (query.active !== undefined && s.active !== query.active) return false;
+            if (query.expiresAt !== undefined) {
+                // Support du style Mongo { expiresAt: { $lte: date } } utilisé par les
+                // recherches de sanctions expirées — comparait auparavant toujours
+                // à la date actuelle sans jamais lire la valeur passée en paramètre.
+                const expected = query.expiresAt;
+                if (!s.expiresAt) return false;
+                const expiresAt = new Date(s.expiresAt);
+                if (expected && typeof expected === 'object' && '$lte' in expected) {
+                    if (!(expiresAt <= new Date(expected.$lte))) return false;
+                } else if (!(expiresAt <= new Date(expected))) {
+                    return false;
+                }
+            }
+            return true;
+        }) || null;
     },
 
     create: async (data) => {
@@ -90,10 +105,7 @@ module.exports = {
 
     updateOne: async (query, update) => {
         await ensureLoaded();
-        const doc = store.find(s =>
-            (query._id !== undefined && s._id === query._id) ||
-            (query.guildId && s.guildId === query.guildId && query.userId && s.userId === query.userId)
-        );
+        const doc = store.find(s => Object.entries(query).every(([key, value]) => s[key] === value));
         if (doc) {
             Object.assign(doc, update.$set || update);
             scheduleSave();

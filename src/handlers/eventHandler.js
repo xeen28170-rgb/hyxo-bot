@@ -19,7 +19,14 @@ class EventHandler {
     async load() {
         this.loaded = 0;
         this.failed = 0;
-        const preservedEvents = ['raw', 'shardReady', 'shardError', 'shardDisconnect', 'shardReconnecting', 'shardResume'];
+        // Les listeners d'infrastructure sont enregistrés par AntiCrash (index.js)
+        // et ne doivent JAMAIS être retirés lors d'un hot-reload des événements :
+        // sans eux, une erreur client non gérée ferait planter le process.
+        const preservedEvents = [
+            'raw',
+            'shardReady', 'shardError', 'shardDisconnect', 'shardReconnecting', 'shardResume',
+            'error', 'warn', 'invalidated', 'rateLimit',
+        ];
         for (const [event] of this.client.eventNames()
             .filter(e => !preservedEvents.includes(e))
             .map(e => [e])) {

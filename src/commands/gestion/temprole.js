@@ -5,6 +5,10 @@ const Helpers = require('../../utils/helpers');
 const TempRole = require('../../models/TempRole');
 const PermissionsHelper = require('../../utils/permissions');
 const { safeSetTimeout } = require('../../utils/safeTimeout');
+const { canManageRankRole } = require('../../utils/privateVoice');
+const { getGuildSettings } = require('../../utils/guildSettings');
+const TempRoleService = require('../../services/tempRoleService');
+const { withKey } = require('../../utils/keyedQueue');
 
 module.exports = {
     name: 'temprole',
@@ -22,6 +26,8 @@ module.exports = {
             return message.channel.send({ embeds: [EmbedHelper.error(`❌ Usage: \`${prefix}temprole ${this.usage}\``)] });
         }
 
+        const settings = message.guildSettings || await getGuildSettings(client, message.guild.id);
+        if (!await canManageRankRole(client, message.member, role, settings)) return message.channel.send({ embeds: [EmbedHelper.error('Votre rang ne permet pas de gerer ce role Owner/WL.')] });
         if (role.managed) {
             return message.channel.send({ embeds: [EmbedHelper.error('❌ Impossible de gérer un rôle géré par une intégration.')] });
         }
@@ -37,10 +43,10 @@ module.exports = {
 
         const expiresAt = new Date(Date.now() + duration);
 
-        await member.roles.add(role, `TempRole — expire ${expiresAt.toISOString()}`);
-
-        await TempRole.remove({ guildId: message.guild.id, userId: member.id, roleId: role.id });
-        await TempRole.create({ guildId: message.guild.id, userId: member.id, roleId: role.id, expiresAt });
+        await withKey(`temprole:${message.guild.id}:${member.id}:${role.id}`, async () => {
+            await member.roles.add(role, `TempRole expire ${expiresAt.toISOString()}`);
+            await TempRole.upsert({ guildId: message.guild.id, userId: member.id, roleId: role.id, expiresAt });
+        });
 
         scheduleTempRoleExpiry(client, message.guild.id, member.id, role.id, duration);
 
@@ -53,13 +59,7 @@ module.exports = {
 function scheduleTempRoleExpiry(client, guildId, userId, roleId, delayMs) {
     safeSetTimeout(async () => {
         try {
-            const guild = client.guilds.cache.get(guildId);
-            if (!guild) return;
-            const member = await guild.members.fetch(userId).catch(() => null);
-            if (member?.roles.cache.has(roleId)) {
-                await member.roles.remove(roleId, 'TempRole expiré').catch(() => {});
-            }
-            await TempRole.remove({ guildId, userId, roleId });
+            await TempRoleService.expire(client, { guildId, userId, roleId });
         } catch (err) {
             console.error('[TempRole] Erreur expiration:', err.message);
         }

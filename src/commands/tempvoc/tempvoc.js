@@ -4,6 +4,8 @@ const TempVoice = require('../../models/TempVoice');
 const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
 const Guild = require('../../models/Guild');
+const Logger = require('../../utils/logger');
+const { settleWithin } = require('../../utils/concurrency');
 const { getGuildSettings, invalidateGuildSettings } = require('../../utils/guildSettings');
 const {
     ActionRowBuilder,
@@ -49,7 +51,14 @@ module.exports = {
             case 'name': {
                 const name = args.slice(1).join(' ').slice(0, 32);
                 if (!name) return message.channel.send({ embeds: [EmbedHelper.error('❌ Fournissez un nom.')] });
-                await channel.setName(name);
+                const pending = channel.setName(name);
+                const applied = await settleWithin(pending, 8000);
+                if (!applied.done) {
+                    // Discord limite les renommages (2 / 10 min) : la requête reste en file d'attente
+                    // et sera appliquée toute seule, on ne fige pas la commande.
+                    pending.then(() => TempVoice.updateOne({ _id: tempVoc._id }, { name })).catch(() => {});
+                    return message.channel.send({ embeds: [EmbedHelper.warning('Discord limite les renommages (2 toutes les 10 minutes). Le nouveau nom sera appliqué dès que possible.')] });
+                }
                 await TempVoice.updateOne({ _id: tempVoc._id }, { name });
                 return message.channel.send({ embeds: [EmbedHelper.success(message.t('tempvoc.renamed', { name }))] });
             }
@@ -73,7 +82,12 @@ module.exports = {
             }
 
             case 'hide':
-                await channel.permissionOverwrites.edit(message.guild.roles.everyone, { ViewChannel: false });
+                // Le propriétaire garde ViewChannel : sinon il ne voit plus son propre salon et ne
+                // peut plus l'afficher.
+                await Promise.all([
+                    channel.permissionOverwrites.edit(tempVoc.ownerId, { ViewChannel: true }),
+                    channel.permissionOverwrites.edit(message.guild.roles.everyone, { ViewChannel: false }),
+                ]);
                 await TempVoice.updateOne({ _id: tempVoc._id }, { hidden: true });
                 return message.channel.send({ embeds: [EmbedHelper.success(message.t('tempvoc.hidden'))] });
 
@@ -108,16 +122,17 @@ module.exports = {
                 if (!member) return message.channel.send({ embeds: [EmbedHelper.error(message.t('general.invalid_user'))] });
                 if (member.id === message.author.id) return message.channel.send({ embeds: [EmbedHelper.error('❌ Vous êtes déjà propriétaire.')] });
 
-                await channel.permissionOverwrites.edit(message.author.id, { ManageChannels: null, Connect: null, ViewChannel: null });
+                await channel.permissionOverwrites.edit(message.author.id, { ManageChannels: null, MoveMembers: null, Connect: null, ViewChannel: null });
                 await channel.permissionOverwrites.edit(member.id, { ManageChannels: true, MoveMembers: true, Connect: true, ViewChannel: true });
                 await TempVoice.updateOne({ _id: tempVoc._id }, { ownerId: member.id });
                 return message.channel.send({ embeds: [EmbedHelper.success(message.t('tempvoc.transferred', { user: member.user.tag }))] });
             }
 
             case 'delete':
-                await channel.delete('Suppression manuelle');
+                await channel.delete('Suppression manuelle').catch(() => {});
                 await TempVoice.deleteOne({ _id: tempVoc._id });
-                return;
+                // .catch : si la commande a été tapée dans le chat du vocal supprimé, l'envoi échoue.
+                return message.channel.send({ embeds: [EmbedHelper.success('Salon vocal supprimé.')] }).catch(() => {});
 
             default:
                 return sendHelp(client, message);
@@ -215,14 +230,14 @@ function buildTempVocRows(settings, tempVoc, canManageChannels) {
             new StringSelectMenuBuilder()
                 .setCustomId('tempvoc_panel_limit')
                 .setPlaceholder('Choisir une limite utilisateur')
-                .addOptions([
+                .addOptions(withEmojiObjects([
                     { label: 'Illimité', value: '0', emoji: '♾️' },
                     { label: '2 utilisateurs', value: '2', emoji: '2️⃣' },
                     { label: '5 utilisateurs', value: '5', emoji: '5️⃣' },
                     { label: '10 utilisateurs', value: '10', emoji: '🔟' },
                     { label: '25 utilisateurs', value: '25', emoji: '👥' },
                     { label: '99 utilisateurs', value: '99', emoji: '🔊' },
-                ]),
+                ])),
         ));
     }
 
@@ -236,6 +251,14 @@ function buildTempVocRows(settings, tempVoc, canManageChannels) {
     }
 
     return rows.slice(0, 5);
+}
+
+// discord.js n'accepte pas un emoji en simple chaîne dans les options d'un menu
+// (il attend { name }) : sans ça, la construction du panneau lève une ValidationError.
+function withEmojiObjects(options) {
+    return options.map(option => (typeof option.emoji === 'string'
+        ? { ...option, emoji: { name: option.emoji } }
+        : option));
 }
 
 async function getTempVocState(message) {
@@ -265,13 +288,16 @@ async function sendTempVocPanel(client, message) {
     async function render(interaction) {
         settings = await getGuildSettings(client, guildId);
         ({ tempVoc, channel } = await getTempVocState(message));
-        await interaction.update({
+        const payload = {
             embeds: [buildTempVocEmbed(message.guild, settings, tempVoc, channel)],
             components: buildTempVocRows(settings, tempVoc, canManageChannels),
-        });
+        };
+        // Interaction déjà acquittée (deferUpdate) → editReply, sinon update classique.
+        if (interaction.deferred || interaction.replied) await interaction.editReply(payload);
+        else await interaction.update(payload);
     }
 
-    collector.on('collect', async (interaction) => {
+    async function handlePanelInteraction(interaction) {
         if (interaction.user.id !== message.author.id) {
             await interaction.reply({
                 embeds: [EmbedHelper.error('Seul l\'auteur de la commande peut utiliser ce panneau.')],
@@ -279,6 +305,10 @@ async function sendTempVocPanel(client, message) {
             });
             return;
         }
+
+        // Acquitte tout de suite : les appels Discord/DB ci-dessous peuvent dépasser
+        // la fenêtre de 3s du jeton (sinon "Unknown interaction" en promesse non gérée).
+        await interaction.deferUpdate();
 
         const customId = interaction.customId;
         const updates = {};
@@ -289,14 +319,14 @@ async function sendTempVocPanel(client, message) {
         }
 
         if (customId === 'tempvoc_panel_toggle') {
-            if (!canManageChannels) return interaction.reply({ embeds: [EmbedHelper.error(message.t('general.no_permission'))], flags: 64 });
+            if (!canManageChannels) return interaction.followUp({ embeds: [EmbedHelper.error(message.t('general.no_permission'))], flags: 64 });
             updates['tempvoc.enabled'] = !settings.tempvoc?.enabled;
         } else if (customId === 'tempvoc_panel_create_channel' && interaction.isChannelSelectMenu()) {
-            if (!canManageChannels) return interaction.reply({ embeds: [EmbedHelper.error(message.t('general.no_permission'))], flags: 64 });
+            if (!canManageChannels) return interaction.followUp({ embeds: [EmbedHelper.error(message.t('general.no_permission'))], flags: 64 });
             updates['tempvoc.createChannel'] = interaction.values[0];
             updates['tempvoc.enabled'] = true;
         } else if (customId === 'tempvoc_panel_category' && interaction.isChannelSelectMenu()) {
-            if (!canManageChannels) return interaction.reply({ embeds: [EmbedHelper.error(message.t('general.no_permission'))], flags: 64 });
+            if (!canManageChannels) return interaction.followUp({ embeds: [EmbedHelper.error(message.t('general.no_permission'))], flags: 64 });
             updates['tempvoc.category'] = interaction.values[0];
         }
 
@@ -309,7 +339,7 @@ async function sendTempVocPanel(client, message) {
 
         ({ tempVoc, channel } = await getTempVocState(message));
         if (!tempVoc || !channel) {
-            await interaction.reply({ embeds: [EmbedHelper.error('❌ Aucun salon temporaire à contrôler.')], flags: 64 });
+            await interaction.followUp({ embeds: [EmbedHelper.error('❌ Aucun salon temporaire à contrôler.')], flags: 64 });
             return;
         }
 
@@ -323,7 +353,11 @@ async function sendTempVocPanel(client, message) {
 
         if (customId === 'tempvoc_panel_hide') {
             const hidden = !tempVoc.hidden;
-            await channel.permissionOverwrites.edit(message.guild.roles.everyone, { ViewChannel: hidden ? false : null });
+            await Promise.all([
+                // Le propriétaire garde ViewChannel quand on masque (sinon auto-blocage).
+                hidden ? channel.permissionOverwrites.edit(tempVoc.ownerId, { ViewChannel: true }) : null,
+                channel.permissionOverwrites.edit(message.guild.roles.everyone, { ViewChannel: hidden ? false : null }),
+            ]);
             await TempVoice.updateOne({ _id: tempVoc._id }, { hidden });
             await render(interaction);
             return;
@@ -338,8 +372,12 @@ async function sendTempVocPanel(client, message) {
         }
 
         if (customId === 'tempvoc_panel_delete') {
-            await interaction.deferUpdate().catch(() => {});
-            await channel.delete('Suppression via panneau TempVoc').catch(() => {});
+            const { confirmInteraction } = require('../../utils/commandConfirmation');
+            if (!await confirmInteraction(interaction, `Supprimer le salon vocal ${channel.name}`)) return;
+            const current = await TempVoice.findOne({ _id: tempVoc._id });
+            const blocked = await require('../../services/blacklistService').isBlocked(interaction.user.id);
+            if (blocked || current?.ownerId !== interaction.user.id) return interaction.followUp({ content: 'Action arrêtée : vous ne possédez plus ce salon.', flags: 64 });
+            await channel.delete('Suppression via panneau TempVoc');
             await TempVoice.deleteOne({ _id: tempVoc._id });
             ({ tempVoc, channel } = await getTempVocState(message));
             settings = await getGuildSettings(client, guildId);
@@ -347,6 +385,18 @@ async function sendTempVocPanel(client, message) {
                 embeds: [buildTempVocEmbed(message.guild, settings, tempVoc, channel)],
                 components: buildTempVocRows(settings, tempVoc, canManageChannels),
             }).catch(() => {});
+        }
+    }
+
+    collector.on('collect', async (interaction) => {
+        try {
+            await handlePanelInteraction(interaction);
+        } catch (error) {
+            // Jamais de rejet non géré : on log et on prévient l'utilisateur si possible.
+            Logger.error('[TempVoc] Erreur panneau:', error.message || String(error));
+            const notice = { embeds: [EmbedHelper.error('❌ Une erreur est survenue, réessaie dans un instant.')], flags: 64 };
+            if (interaction.deferred || interaction.replied) await interaction.followUp(notice).catch(() => {});
+            else await interaction.reply(notice).catch(() => {});
         }
     });
 
@@ -391,6 +441,9 @@ async function handleSetup(client, message, sub, args) {
             client.cache.invalidateGuild(message.guild.id);
             return message.channel.send({ embeds: [EmbedHelper.success(`✅ Catégorie tempvoc: **${cat.name}**`)] });
         }
+
+        default:
+            return sendHelp(client, message);
     }
 }
 

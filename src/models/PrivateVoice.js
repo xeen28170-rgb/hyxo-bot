@@ -74,6 +74,7 @@ module.exports = {
             accessLevel: data.accessLevel || 'member',
             permitted: Array.isArray(data.permitted) ? data.permitted : [],
             overriddenIds: Array.isArray(data.overriddenIds) ? data.overriddenIds : [],
+            originalOverwrites: data.originalOverwrites || null,
             createdAt: Date.now(),
         };
         store[data.channelId] = doc;

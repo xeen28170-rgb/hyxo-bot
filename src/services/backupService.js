@@ -1,256 +1,145 @@
 'use strict';
 
+const { ChannelType } = require('discord.js');
 const Backup = require('../models/Backup');
-const Helpers = require('../utils/helpers');
-const Logger = require('../utils/logger');
 const Guild = require('../models/Guild');
+const Helpers = require('../utils/helpers');
 const { getGuildSettings, invalidateGuildSettings } = require('../utils/guildSettings');
+const { withKey } = require('../utils/keyedQueue');
+const { mapLimit } = require('../utils/concurrency');
+
+// Réglages jamais écrasés par une restauration (gérés via -secur / -owner uniquement).
+const SECURITY_KEYS = ['owners', 'ownerRoles', 'antiraid', 'antidown'];
+
+function overwrites(channel) {
+    return channel.permissionOverwrites.cache.map(o => ({ id: o.id, type: o.type,
+        allow: o.allow.bitfield.toString(), deny: o.deny.bitfield.toString() }));
+}
+
+function remapConfiguration(value, ids) {
+    if (typeof value === 'string') return ids.get(value) || value;
+    if (Array.isArray(value)) return value.map(item => remapConfiguration(item, ids));
+    if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value)
+        .map(([key, item]) => [ids.get(key) || key, remapConfiguration(item, ids)]));
+    return value;
+}
 
 const BackupService = {
-    /**
-     * Créer un backup du serveur (structure + configuration)
-     */
-    async create(guild, userId) {
-        try {
+    async create(guild, userId, kind = 'server') {
+        const data = { name: guild.name, icon: guild.iconURL(), emojis: guild.emojis.cache.map(e => ({ name: e.name, url: e.url })) };
+        if (kind === 'server') {
             const settings = await getGuildSettings(guild.client, guild.id, { create: false });
-
-            const roles = guild.roles.cache
-                .filter(r => r.id !== guild.id && !r.managed)
-                .sort((a, b) => b.position - a.position)
-                .map(r => ({
-                    id: r.id,
-                    name: r.name,
-                    color: r.color,
-                    hoist: r.hoist,
-                    permissions: r.permissions.bitfield.toString(),
-                    mentionable: r.mentionable,
-                    position: r.position
-                }));
-
-            const channels = guild.channels.cache
-                .filter(c => c.type !== 4) // Pas les catégories pour l'instant dans le map à plat
-                .map(c => ({
-                    name: c.name,
-                    type: c.type,
-                    parent: c.parent?.name,
-                    topic: typeof c.topic === 'string' ? c.topic : undefined,
-                    nsfw: typeof c.nsfw === 'boolean' ? c.nsfw : undefined,
-                    rateLimitPerUser: typeof c.rateLimitPerUser === 'number' ? c.rateLimitPerUser : undefined,
-                    position: c.position,
-                    permissionOverwrites: c.permissionOverwrites.cache.map(o => ({
-                        id: o.id,
-                        type: o.type,
-                        allow: o.allow.bitfield.toString(),
-                        deny: o.deny.bitfield.toString()
-                    }))
-                }));
-
-            const categories = guild.channels.cache
-                .filter(c => c.type === 4)
-                .map(c => ({
-                    name: c.name,
-                    position: c.position,
-                    permissionOverwrites: c.permissionOverwrites.cache.map(o => ({
-                        id: o.id,
-                        type: o.type,
-                        allow: o.allow.bitfield.toString(),
-                        deny: o.deny.bitfield.toString()
-                    }))
-                }));
-
-            const backupId = Helpers.generateId(12);
-            
-            const backupData = {
-                name: guild.name,
-                icon: guild.iconURL(),
-                roles,
-                channels,
-                categories,
-                emojis: guild.emojis.cache.map(e => ({ name: e.name, url: e.url })),
-                // Sauvegarder la configuration complète du serveur
-                configuration: settings ? {
-                    prefix: settings.prefix,
-                    language: settings.language,
-                    logs: settings.logs,
-                    moderation: settings.moderation,
-                    antiraid: settings.antiraid,
-                    automod: settings.automod,
-                    tickets: settings.tickets,
-                    tempvoc: settings.tempvoc,
-                    giveaway: settings.giveaway,
-                    welcome: settings.welcome,
-                    boost: settings.boost,
-                    owners: settings.owners,
-                    modRoles: settings.modRoles,
-                    adminRoles: settings.adminRoles,
-                } : null
-            };
-
-            const backup = await Backup.create({
-                guildId: guild.id,
-                createdBy: userId,
-                backupId,
-                data: backupData,
-                size: JSON.stringify(backupData).length
-            });
-
-            return backup;
-        } catch (error) {
-            Logger.error('Erreur lors de la création du backup:', error);
-            throw error;
+            data.roles = guild.roles.cache.filter(r => r.id !== guild.id && !r.managed)
+                .sort((a, b) => a.position - b.position).map(r => ({ id: r.id, name: r.name, color: r.color,
+                    hoist: r.hoist, permissions: r.permissions.bitfield.toString(), mentionable: r.mentionable, position: r.position }));
+            const channels = guild.channels.cache.filter(c => !c.isThread?.() && c.permissionOverwrites);
+            const serialize = c => ({ id: c.id, name: c.name, type: c.type, parentId: c.parentId,
+                parent: c.parent?.name, position: c.position, topic: c.topic, nsfw: c.nsfw,
+                rateLimitPerUser: c.rateLimitPerUser, bitrate: c.bitrate, userLimit: c.userLimit,
+                permissionOverwrites: overwrites(c) });
+            data.categories = channels.filter(c => c.type === ChannelType.GuildCategory).map(serialize);
+            data.channels = channels.filter(c => c.type !== ChannelType.GuildCategory).map(serialize);
+            const config = { ...settings };
+            for (const key of ['guildId', 'createdAt', 'updatedAt', 'save', 'totalCommands']) delete config[key];
+            data.configuration = JSON.parse(JSON.stringify(config));
         }
+        return Backup.create({ guildId: guild.id, createdBy: userId, backupId: Helpers.generateId(12), kind,
+            data, size: Buffer.byteLength(JSON.stringify(data)) });
     },
 
-    /**
-     * Remappe l'id d'un override de permissions sauvegardé vers sa cible réelle.
-     * - type 0 (rôle) : on remplace par le nouvel id du rôle recréé (via roleMap),
-     *   le @everyone étant remplacé par l'id du guild.
-     * - type 1 (utilisateur) : on conserve l'id tel quel.
-     * Fonction pure → testable.
-     */
     rewriteOverwrite(overwrite, roleMap, everyoneRoleId) {
-        if (!overwrite || typeof overwrite !== 'object') return null;
-        if (!overwrite.id || (overwrite.type !== 0 && overwrite.type !== 1)) return null;
-        const originalId = String(overwrite.id);
-        let newId = originalId;
-
-        if (overwrite.type === 0) {
-            newId = originalId === everyoneRoleId
-                ? everyoneRoleId
-                : (roleMap.get(originalId) || null);
-            if (!newId) return null; // rôle non mappé → on ignore cet override
-        }
-        // type 1 (membre) : id conservé tel quel.
-
-        return {
-            id: newId,
-            type: overwrite.type,
-            allow: overwrite.allow,
-            deny: overwrite.deny,
-        };
+        if (!overwrite?.id || ![0, 1].includes(overwrite.type)) return null;
+        const id = overwrite.type === 0 && overwrite.id !== everyoneRoleId ? roleMap.get(overwrite.id) : overwrite.id;
+        return id ? { ...overwrite, id, allow: BigInt(overwrite.allow), deny: BigInt(overwrite.deny) } : null;
     },
 
-    /**
-     * Restaurer un backup (structure + configuration)
-     */
     async restore(guild, backupId) {
-        const backup = await Backup.findOne({ backupId });
-        if (!backup) return null;
-
-        const data = backup.data;
-        const report = { restored: 0, failed: 0, duplicates: 0, roles: [], channels: [] };
-
-        try {
-            // Restaurer la configuration du serveur
-            if (data.configuration) {
-                await Guild.updateOne({ guildId: guild.id }, data.configuration);
-                invalidateGuildSettings(guild.client, guild.id);
-                Logger.info(`Configuration restaurée pour le serveur ${guild.name}`);
+        return withKey(`backup-restore:${guild.id}`, async () => {
+            const backup = await Backup.findOne({ backupId, guildId: guild.id });
+            if (!backup) return null;
+            const data = backup.data;
+            const report = { restored: 0, failed: 0, duplicates: 0, roles: [], channels: [], errors: [] };
+            const roleMap = new Map([[guild.id, guild.id]]);
+            const channelMap = new Map();
+            const categoriesByName = new Map();
+            const restoredChannels = [];
+            const restoredIds = { ...backup.restoredIds };
+            const fail = (label, error) => { report.failed++; report.errors.push(`${label}: ${error.message}`); };
+            for (const saved of [...(data.roles || [])].sort((a, b) => a.position - b.position)) {
+                try {
+                    const existing = guild.roles.cache.get(restoredIds[saved.id] || saved.id);
+                    const role = existing || await guild.roles.create({ name: saved.name, color: saved.color,
+                        hoist: saved.hoist, permissions: BigInt(saved.permissions), mentionable: saved.mentionable, reason: 'Restauration backup' });
+                    roleMap.set(saved.id, role.id);
+                    restoredIds[saved.id] = role.id;
+                    await Backup.updateOne({ backupId, guildId: guild.id }, { restoredIds: { ...restoredIds } });
+                    if (existing) report.duplicates++; else report.restored++;
+                    report.roles.push({ name: saved.name, status: existing ? 'duplicate' : 'created' });
+                } catch (error) { fail(saved.name, error); report.roles.push({ name: saved.name, status: 'failed' }); }
             }
 
-            // 1) Créer (ou réutiliser) les rôles, en mappant ancien id → nouvel id.
-            const roleMap = new Map(); // oldId → newRoleId
-            const rolesData = Array.isArray(data.roles) ? data.roles : [];
-            for (const rData of rolesData) {
+            if (report.roles.length && report.failed === 0) {
                 try {
-                    const existing = guild.roles.cache.find(r => r.name === rData.name && !r.managed);
-                    if (existing) {
-                        roleMap.set(rData.id, existing.id);
-                        report.duplicates++;
-                        report.roles.push({ name: rData.name, status: 'duplicate' });
-                        continue;
+                    await guild.roles.setPositions((data.roles || []).map(r => ({ role: roleMap.get(r.id), position: r.position })));
+                } catch (error) { fail('Positions des roles', error); }
+            }
+
+            for (const saved of [...(data.categories || []).map(c => ({ ...c, type: ChannelType.GuildCategory })), ...(data.channels || [])]) {
+                try {
+                    // Les anciens backups n'avaient pas d'ID de salon : nom uniquement en migration.
+                    const existing = saved.id ? guild.channels.cache.get(restoredIds[saved.id] || saved.id)
+                        : guild.channels.cache.find(c => c.name === saved.name && c.type === saved.type);
+                    const parent = saved.parentId ? channelMap.get(saved.parentId) || guild.channels.cache.get(saved.parentId)?.id
+                        : categoriesByName.get(saved.parent);
+                    if ((saved.parentId || saved.parent) && !parent) throw new Error('Categorie parente non restauree');
+                    const options = { name: saved.name, type: saved.type, position: saved.position, reason: 'Restauration backup' };
+                    if (saved.type !== ChannelType.GuildCategory) options.parent = parent || null;
+                    for (const key of ['topic', 'nsfw', 'rateLimitPerUser', 'bitrate', 'userLimit']) if (saved[key] != null) options[key] = saved[key];
+                    // Permissions presentes des la creation : pas de fenetre publique.
+                    options.permissionOverwrites = (saved.permissionOverwrites || []).map(o => this.rewriteOverwrite(o, roleMap, guild.id)).filter(Boolean);
+                    if (options.permissionOverwrites.length !== (saved.permissionOverwrites || []).length) throw new Error('Role requis pour les permissions non restaure');
+                    const channel = existing || await guild.channels.create(options);
+                    if (existing) await channel.permissionOverwrites.set(options.permissionOverwrites);
+                    if (saved.id) {
+                        channelMap.set(saved.id, channel.id);
+                        restoredIds[saved.id] = channel.id;
+                        await Backup.updateOne({ backupId, guildId: guild.id }, { restoredIds: { ...restoredIds } });
                     }
-                    const role = await guild.roles.create({
-                        name: rData.name,
-                        color: rData.color,
-                        hoist: rData.hoist,
-                        permissions: BigInt(rData.permissions),
-                        mentionable: rData.mentionable,
-                        reason: 'Restauration Backup',
-                    });
-                    roleMap.set(rData.id, role.id);
-                    report.restored++;
-                    report.roles.push({ name: rData.name, status: 'created' });
-                } catch {
-                    report.failed++;
-                    report.roles.push({ name: rData.name, status: 'failed' });
-                }
+                    if (saved.type === ChannelType.GuildCategory) categoriesByName.set(saved.name, channel.id);
+                    restoredChannels.push(channel);
+                    if (existing) report.duplicates++; else report.restored++;
+                    report.channels.push({ name: saved.name, status: existing ? 'duplicate' : 'created' });
+                } catch (error) { fail(saved.name, error); report.channels.push({ name: saved.name, status: 'failed' }); }
             }
-
-            // 2) Créer (ou réutiliser) les catégories.
-            const categoryMap = new Map(); // oldName → newChannelId
-            const categoriesData = Array.isArray(data.categories) ? data.categories : [];
-            for (const catData of categoriesData) {
-                try {
-                    const existing = guild.channels.cache.find(c => c.name === catData.name && c.type === 4);
-                    if (existing) {
-                        categoryMap.set(catData.name, existing.id);
-                        report.duplicates++;
-                        continue;
-                    }
-                    const cat = await guild.channels.create({
-                        name: catData.name,
-                        type: 4,
-                        position: catData.position,
-                        reason: 'Restauration Backup',
-                    });
-                    categoryMap.set(catData.name, cat.id);
-                    report.restored++;
-                } catch {
-                    report.failed++;
-                }
-            }
-
-            // 3) Créer les salons puis réappliquer leurs permissionOverwrites.
-            const channelsData = Array.isArray(data.channels) ? data.channels : [];
-            for (const chData of channelsData) {
-                let channel;
-                try {
-                    const existing = guild.channels.cache.find(c => c.name === chData.name && c.type === chData.type);
-                    if (existing) {
-                        channel = existing;
-                        report.duplicates++;
-                        report.channels.push({ name: chData.name, status: 'duplicate' });
-                    } else {
-                        const options = {
-                            name: chData.name,
-                            type: chData.type,
-                            parent: chData.parent ? categoryMap.get(chData.parent) : null,
-                            position: chData.position,
-                            reason: 'Restauration Backup',
-                        };
-                        if (chData.type === 0) {
-                            if (typeof chData.topic === 'string') options.topic = chData.topic;
-                            if (typeof chData.nsfw === 'boolean') options.nsfw = chData.nsfw;
-                            if (typeof chData.rateLimitPerUser === 'number') options.rateLimitPerUser = chData.rateLimitPerUser;
-                        }
-                        channel = await guild.channels.create(options);
+            if (backup.kind === 'emoji') {
+                for (const emoji of data.emojis || []) {
+                    try {
+                        if (guild.emojis.cache.some(e => e.name === emoji.name)) { report.duplicates++; continue; }
+                        await guild.emojis.create({ attachment: emoji.url, name: emoji.name, reason: 'Restauration backup emojis' });
                         report.restored++;
-                        report.channels.push({ name: chData.name, status: 'created' });
-                    }
-
-                    // 4) Réappliquer les permissionOverwrites en remappant les ids de rôles.
-                    const overwrites = Array.isArray(chData.permissionOverwrites) ? chData.permissionOverwrites : [];
-                    const rewritten = overwrites
-                        .map(ov => this.rewriteOverwrite(ov, roleMap, guild.id))
-                        .filter(Boolean);
-                    if (rewritten.length > 0 && channel?.permissionOverwrites?.set) {
-                        await channel.permissionOverwrites.set(rewritten).catch(() => {});
-                    }
-                } catch {
-                    report.failed++;
-                    if (!report.channels.some(rc => rc.name === chData.name)) {
-                        report.channels.push({ name: chData.name, status: 'failed' });
-                    }
+                    } catch (error) { fail(emoji.name, error); }
                 }
             }
-
+            if (data.configuration && report.failed === 0) {
+                const config = remapConfiguration(data.configuration, new Map([...roleMap, ...channelMap]));
+                // Ne pas annuler une detention/liberation survenue depuis la sauvegarde.
+                const current = await getGuildSettings(guild.client, guild.id, { create: false, useCache: false });
+                if (config.prison) config.prison = { ...config.prison, prisoners: current?.prison?.prisoners || [], memberOverwrites: current?.prison?.memberOverwrites || {} };
+                // Sécurité : un simple admin (-backup restore) ne doit pas pouvoir remettre
+                // d'anciens owners/whitelist ni une config antiraid désactivée.
+                for (const key of SECURITY_KEYS) {
+                    if (current && key in current) config[key] = current[key];
+                    else delete config[key];
+                }
+                await Guild.updateOne({ guildId: guild.id }, config);
+                invalidateGuildSettings(guild.client, guild.id);
+            }
+            const PrisonService = require('./prisonService');
+            await mapLimit(restoredChannels, (channel) => PrisonService.enforceChannel(guild.client, channel), 3);
             return report;
-        } catch (error) {
-            Logger.error('Erreur lors de la restauration du backup:', error);
-            throw error;
-        }
-    }
+        });
+    },
+    remapConfiguration,
 };
 
 module.exports = BackupService;

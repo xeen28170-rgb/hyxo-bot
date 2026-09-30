@@ -11,18 +11,17 @@ module.exports = {
     cooldown: 5,
     async run(client, message) {
         const start = Date.now();
-        const msg = await message.channel.send({ embeds: [EmbedHelper.info('🏓 Pong!', '⏳ Calcul...')] });
+        const msg = await message.channel.send({ embeds: [EmbedHelper.info('🏓 Pong !', 'Je mesure le temps de réponse…')] });
         const latency = Date.now() - start;
         const wsLatency = client.ws.ping;
 
         const embed = new EmbedBuilder()
-            .setColor(latency < 100 ? 0x57F287 : latency < 250 ? 0xFEE75C : 0xED4245)
-            .setTitle('🏓 Pong!')
+            .setColor(latency < 100 ? EmbedHelper.Colors.SUCCESS : latency < 250 ? EmbedHelper.Colors.WARNING : EmbedHelper.Colors.ERROR)
+            .setTitle('🏓 Pong !')
             .addFields(
-                { name: '📡 Latence API', value: `\`${latency}ms\``, inline: true },
-                { name: '💓 WebSocket', value: `\`${wsLatency}ms\``, inline: true },
-            )
-            .setTimestamp();
+                { name: 'Réponse', value: `**${latency} ms**`, inline: true },
+                { name: 'Connexion Discord', value: wsLatency < 0 ? 'En cours de mesure' : `**${wsLatency} ms**`, inline: true },
+            );
 
         await msg.edit({ embeds: [embed] });
     },

@@ -1,5 +1,7 @@
 'use strict';
 
+const { getEmoji, matchesReaction } = require('../../config/emojis');
+
 const EmbedHelper = require('../../utils/embedBuilder');
 const PermissionsHelper = require('../../utils/permissions');
 
@@ -17,15 +19,34 @@ module.exports = {
             return message.channel.send({ embeds: [EmbedHelper.info('🌐 Serverlist', 'Le bot n\'est sur aucun serveur.', { color: 0xFF0000 })] });
         }
 
+        const getInviteUrl = async (guild) => {
+            try {
+                if (guild.members.me?.permissions.has('ManageGuild')) {
+                    const existing = await guild.invites.fetch().catch(() => null);
+                    const reusable = existing?.find(inv => inv.maxAge === 0);
+                    if (reusable) return reusable.url;
+                }
+                const channel = guild.channels.cache.find(
+                    c => c.type === 0 && c.permissionsFor(guild.members.me)?.has('CreateInstantInvite')
+                );
+                if (!channel) return null;
+                const invite = await channel.createInvite({ maxAge: 0, unique: false });
+                return invite.url;
+            } catch {
+                return null;
+            }
+        };
+
+        const lines = await Promise.all(guilds.map(async (g, idx) => {
+            const url = await getInviteUrl(g);
+            const label = url ? `[${g.name}](${url})` : g.name;
+            return `\`${idx + 1}.\` **${label}** — \`${g.id}\` — ${g.memberCount} membres`;
+        }));
+
         const PER_PAGE = 20;
         const pages = [];
-        for (let i = 0; i < guilds.length; i += PER_PAGE) {
-            const chunk = guilds.slice(i, i + PER_PAGE);
-            pages.push(
-                chunk.map((g, idx) =>
-                    `\`${i + idx + 1}.\` **${g.name}** — \`${g.id}\` — ${g.memberCount} membres`
-                ).join('\n')
-            );
+        for (let i = 0; i < lines.length; i += PER_PAGE) {
+            pages.push(lines.slice(i, i + PER_PAGE).join('\n'));
         }
 
         let page = 0;
@@ -40,18 +61,18 @@ module.exports = {
 
         if (pages.length === 1) return;
 
-        await msg.react('◀️');
-        await msg.react('▶️');
+        await msg.react(getEmoji('ARROW_LEFT'));
+        await msg.react(getEmoji('ARROW_RIGHT'));
 
         const collector = msg.createReactionCollector({
-            filter: (r, u) => ['◀️', '▶️'].includes(r.emoji.name) && u.id === message.author.id,
+            filter: (r, u) => (matchesReaction(r.emoji, 'ARROW_LEFT') || matchesReaction(r.emoji, 'ARROW_RIGHT')) && u.id === message.author.id,
             time: 120_000,
         });
 
         collector.on('collect', async (reaction, user) => {
             reaction.users.remove(user.id).catch(() => {});
-            if (reaction.emoji.name === '◀️' && page > 0) page--;
-            else if (reaction.emoji.name === '▶️' && page < pages.length - 1) page++;
+            if (matchesReaction(reaction.emoji, 'ARROW_LEFT') && page > 0) page--;
+            else if (matchesReaction(reaction.emoji, 'ARROW_RIGHT') && page < pages.length - 1) page++;
             await msg.edit({ embeds: [buildEmbed(page)] });
         });
 

@@ -5,6 +5,8 @@ const EmbedHelper = require('../../utils/embedBuilder');
 const AutomodService = require('../../services/automodService');
 const { getGuildSettings } = require('../../utils/guildSettings');
 
+const SNIPE_HISTORY = 10;
+
 module.exports = {
     name: 'messageDelete',
     async run(client, message) {
@@ -17,12 +19,18 @@ module.exports = {
         }
         if (!message.author || message.author.bot || !message.guild) return;
 
-        client.cache.set(`snipe_${message.channel.id}`, {
+        // Historique des derniers messages supprimés du salon (le plus récent en premier)
+        // pour `-snipe`, `-snipe 2`, etc.
+        const snipeKey = `snipe_${message.channel.id}`;
+        const previous = client.cache.get(snipeKey);
+        const history = Array.isArray(previous) ? previous : previous ? [previous] : [];
+        history.unshift({
             content: message.content,
             author: message.author,
             timestamp: Date.now(),
             image: message.attachments.first()?.proxyURL
         });
+        client.cache.set(snipeKey, history.slice(0, SNIPE_HISTORY));
 
         const embed = EmbedHelper.info('🗑️ Message supprimé', [
             `**Auteur:** ${message.author} (\`${message.author.id}\`)`,

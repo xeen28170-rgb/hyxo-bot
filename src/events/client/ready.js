@@ -12,6 +12,12 @@ const TempRole = require('../../models/TempRole');
 const { scheduleTempRoleExpiry } = require('../../commands/gestion/temprole');
 const { startStatsUpdater } = require('../../commands/logs/statschannels');
 const { getGuildSettings } = require('../../utils/guildSettings');
+const TempRoleService = require('../../services/tempRoleService');
+const AutoBackupService = require('../../services/autoBackupService');
+const BlacklistService = require('../../services/blacklistService');
+const InviteSecurity = require('../../services/inviteSecurityService');
+const PrisonService = require('../../services/prisonService');
+const SupportRoleService = require('../../services/supportRoleService');
 
 module.exports = {
     name: 'clientReady',
@@ -22,6 +28,7 @@ module.exports = {
         Logger.info(`Commandes: ${client.commands.size}`);
 
         for (const [, guild] of client.guilds.cache) {
+            if (await InviteSecurity.enforce(guild)) continue;
             client.boostLogCache.set(guild.id, guild.premiumSubscriptionCount || 0);
         }
         Logger.debug(`Compteurs boost initialisés pour ${client.boostLogCache.size} serveur(s).`);
@@ -36,29 +43,62 @@ module.exports = {
             client.user.setPresence({ status: 'online', activities: [activity] });
         };
 
-        setActivity();
-        setInterval(setActivity, 30000);
+        // ─── Schedulers / cron ─────────────────────────────────────────────
+        // Le client peut se reconnecter (shardResume) ou les événements peuvent
+        // être hot-reloadés. On stocke les handles sur le client et on les
+        // NETTOIE avant d'en créer de nouveaux : sinon chaque reconnexion
+        // empile un setInterval d'activité + 3 cron → activités en double,
+        // sanctions/reminders/giveaways/twitch traités plusieurs fois.
+        if (client._readyTimers) {
+            clearInterval(client._readyTimers.activity);
+            for (const task of (client._readyTimers.crons || [])) {
+                try { task.stop(); } catch { /* déjà arrêté */ }
+            }
+        }
+        const readyTimers = { crons: [] };
 
-        cron.schedule('* * * * *', async () => {
+        setActivity();
+        readyTimers.activity = setInterval(setActivity, 30000);
+
+        readyTimers.crons.push(cron.schedule('* * * * *', async () => {
             try { await SanctionService.processExpired(client); } catch (err) { Logger.error('Cron sanctions:', err); }
+            try { await TempRoleService.processExpired(client); } catch (err) { Logger.error('Cron roles temporaires:', err); }
             try { await ReminderService.processReminders(client); } catch (err) { Logger.error('Cron reminders:', err); }
             try { await GiveawayService.processEnded(client); } catch (err) { Logger.error('Cron giveaways:', err); }
-        });
+        }));
 
-        cron.schedule('*/5 * * * *', async () => {
+        readyTimers.crons.push(cron.schedule('*/5 * * * *', async () => {
             Logger.debug(`Heartbeat | Ping: ${client.ws.ping}ms | RAM: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`);
             try { await TwitchService.processAlerts(client); } catch (err) { Logger.error('Cron Twitch:', err); }
             // Purge périodique des caches antiraid en mémoire (audit logs déjà
             // traités, compteurs, antiRaidCache du client) pour éviter les fuites.
             try { AntiraidService.cleanupCache(client); } catch (err) { Logger.error('Cron antiraid cleanup:', err); }
-        });
+            try { await BlacklistService.enforceAll(client); } catch (err) { Logger.error('Cron blacklist:', err); }
+            try { await AutoBackupService.process(client); } catch (err) { Logger.error('Cron backups:', err); }
+        }));
 
 
-        cron.schedule('0 3 * * *', async () => {
-            Logger.info('Backup automatique en cours...');
-        });
+        client._readyTimers = readyTimers;
 
         Logger.success(`✅ ${client.user.username} est opérationnel!`);
+        await BlacklistService.enforceAll(client);
+        await AutoBackupService.process(client);
+        await SanctionService.processExpired(client);
+
+        for (const guild of client.guilds.cache.values()) {
+            const settings = await getGuildSettings(client, guild.id, { create: false });
+            for (const id of settings?.prison?.prisoners || []) {
+                try {
+                    const member = await guild.members.fetch(id);
+                    await PrisonService.restorePrisonRole(client, member);
+                } catch (error) { Logger.error(`[Prison] Reprise ${guild.id}/${id}:`, error.message); }
+            }
+            if (settings?.config?.soutien) {
+                for (const presence of guild.presences.cache.values()) {
+                    try { await SupportRoleService.onPresence(client, presence); } catch (error) { Logger.error('[Soutien] Reprise:', error.message); }
+                }
+            }
+        }
 
         // ─── Reprise des Stats Channels au démarrage ──────────────────────────
         try {
@@ -82,14 +122,7 @@ module.exports = {
             for (const tr of allTempRoles) {
                 const remaining = new Date(tr.expiresAt).getTime() - now;
                 if (remaining <= 0) {
-                    const guild = client.guilds.cache.get(tr.guildId);
-                    if (guild) {
-                        const member = await guild.members.fetch(tr.userId).catch(() => null);
-                        if (member?.roles.cache.has(tr.roleId)) {
-                            await member.roles.remove(tr.roleId, 'TempRole expiré (reprise démarrage)').catch(() => {});
-                        }
-                    }
-                    await TempRole.remove({ guildId: tr.guildId, userId: tr.userId, roleId: tr.roleId });
+                    await TempRoleService.expire(client, tr);
                     expired++;
                 } else {
                     scheduleTempRoleExpiry(client, tr.guildId, tr.userId, tr.roleId, remaining);

@@ -29,22 +29,29 @@ module.exports = {
         }
 
         const guild = message.guild;
-        const owner = await guild.fetchOwner();
         const channels = guild.channels.cache;
+        const settings = message.guildSettings || {};
+        const voiceCount = guild.voiceStates.cache.filter(state => state.channelId).size;
+        const protections = [
+            `Antiraid : **${settings.antiraid?.enabled ? 'actif' : 'inactif'}**`,
+            `Automod : **${settings.automod?.enabled ? 'actif' : 'inactif'}**`,
+        ];
         
         const embed = new EmbedBuilder()
-            .setColor(0xFF0000)
+            .setColor(EmbedHelper.Colors.PRIMARY)
             .setTitle(guild.name)
             .setThumbnail(guild.iconURL({ dynamic: true, size: 1024 }))
             .addFields(
-                { name: 'Propriétaire', value: `${owner.user.tag} (\`${owner.id}\`)`, inline: true },
+                { name: 'Propriétaire', value: `<@${guild.ownerId}>`, inline: true },
                 { name: 'Membres', value: `${guild.memberCount}`, inline: true },
-                { name: 'Boosts', value: `${guild.premiumSubscriptionCount} (Niv. ${guild.premiumTier})`, inline: true },
+                { name: 'En vocal', value: `${voiceCount}`, inline: true },
+                { name: 'Boosts', value: `${guild.premiumSubscriptionCount || 0} · niveau ${guild.premiumTier}`, inline: true },
                 { name: 'Salons', value: `${channels.size}`, inline: true },
                 { name: 'Rôles', value: `${guild.roles.cache.size}`, inline: true },
-                { name: 'Création', value: `${Helpers.discordTimestamp(guild.createdAt, 'f')}`, inline: true }
+                { name: 'Création', value: `${Helpers.discordTimestamp(guild.createdAt, 'f')}`, inline: true },
+                { name: 'Protections', value: protections.join('\n') }
             )
-            .setTimestamp();
+            .setFooter({ text: `ID : ${guild.id}` });
 
         message.channel.send({ embeds: [embed] });
     },

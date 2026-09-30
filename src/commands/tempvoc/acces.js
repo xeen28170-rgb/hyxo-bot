@@ -34,12 +34,17 @@ module.exports = {
         const added = [];
         const failed = [];
         for (const raw of args) {
-            const id = (raw.match(/\d{17,20}/) || [])[0];
+            const id = Helpers.resolveUserId(raw);
             if (!id) { failed.push(raw); continue; }
             const member = await Helpers.resolveMember(message.guild, raw);
             if (!member) { failed.push(raw); continue; }
 
-            await channel.permissionOverwrites.edit(member.id, { Connect: true, ViewChannel: true }).catch(() => {});
+            try {
+                await channel.permissionOverwrites.edit(member.id, { Connect: true, ViewChannel: true });
+            } catch {
+                failed.push(raw);
+                continue;
+            }
             await PrivateVoice.updateOne({ channelId: channel.id }, { $addToSet: { permitted: member.id } });
             added.push(member.user.tag);
         }

@@ -3,6 +3,7 @@
 const { AuditLogEvent } = require('discord.js');
 const AntiraidService = require('../../services/antiraidService');
 const Logger = require('../../utils/logger');
+const LogDispatcher = require('../../utils/logDispatcher');
 const { getGuildSettings } = require('../../utils/guildSettings');
 
 module.exports = {
@@ -10,6 +11,7 @@ module.exports = {
     once: false,
     async run(client, auditLog, guild) {
         if (!guild) return;
+        LogDispatcher.recordAuditEntry(guild.id, auditLog);
         try {
             const settings = await getGuildSettings(client, guild.id, { create: false });
 

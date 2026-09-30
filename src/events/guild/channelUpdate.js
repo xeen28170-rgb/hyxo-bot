@@ -6,12 +6,14 @@ const LogDispatcher = require('../../utils/logDispatcher');
 const EmbedHelper = require('../../utils/embedBuilder');
 const { isStatsChannelId, scheduleStatsUpdate } = require('../../commands/logs/statschannels');
 const { getGuildSettings } = require('../../utils/guildSettings');
+const PrisonService = require('../../services/prisonService');
 
 module.exports = {
     name: 'channelUpdate',
     async run(client, oldChannel, newChannel) {
         const guild = newChannel.guild || oldChannel.guild;
         if (!guild) return;
+        await PrisonService.enforceChannel(client, newChannel);
         const settings = await getGuildSettings(client, guild.id, { create: false });
         await AntiraidService.handleRecentAuditAction(client, guild, AuditLogEvent.ChannelUpdate, newChannel.id || oldChannel.id, settings);
 

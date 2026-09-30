@@ -20,11 +20,12 @@ module.exports = {
         if (!members.size) return message.channel.send({ embeds: [EmbedHelper.error('Aucun membre dans le salon de départ.')] });
 
         let count = 0;
+        let failed = 0;
         for (const member of members.values()) {
-            await member.voice.setChannel(to).catch(() => {});
-            count++;
+            try { await member.voice.setChannel(to); count++; } catch { failed++; }
         }
 
-        message.channel.send({ embeds: [EmbedHelper.success(`✅ Déplacement de **${count}** membres effectué.`)] });
+        const report = `**${count}** membres déplacés de <#${from.id}> vers <#${to.id}>. **${failed}** échecs.`;
+        await message.channel.send({ embeds: [failed ? EmbedHelper.warning(report) : EmbedHelper.success(report)], allowedMentions: { parse: [] } });
     },
 };

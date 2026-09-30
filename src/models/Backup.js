@@ -42,6 +42,14 @@ function scheduleSave() {
 }
 
 module.exports = {
+    updateOne: async (query, update) => {
+        await ensureLoaded();
+        const doc = Object.values(store).find(b => Object.entries(query).every(([key, value]) => b[key] === value));
+        if (!doc) return { modifiedCount: 0 };
+        Object.assign(doc, update);
+        scheduleSave();
+        return { modifiedCount: 1 };
+    },
     find: async (query) => {
         await ensureLoaded();
         let results = Object.values(store);

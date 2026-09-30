@@ -53,10 +53,11 @@ function applyArrayUpdate(doc, update, operator) {
         if (doc[key] === undefined && operator !== '$pull') doc[key] = [];
         if (!Array.isArray(doc[key])) continue;
 
+        const values = value && typeof value === 'object' && Array.isArray(value.$each) ? value.$each : [value];
         if (operator === '$addToSet') {
-            if (!doc[key].includes(value)) doc[key].push(value);
+            for (const item of values) if (!doc[key].includes(item)) doc[key].push(item);
         } else if (operator === '$pull') {
-            doc[key] = doc[key].filter(item => item !== value);
+            doc[key] = doc[key].filter(item => !values.includes(item));
         }
     }
 }
@@ -65,8 +66,9 @@ function applyUpdate(doc, update) {
     if (update.$addToSet) applyArrayUpdate(doc, update.$addToSet, '$addToSet');
     if (update.$pull) applyArrayUpdate(doc, update.$pull, '$pull');
 
-    const payload = update.$set || (!update.$addToSet && !update.$pull ? update : null);
-    if (payload) Object.assign(doc, payload);
+    // Champs simples mélangés aux opérateurs (ex: { ownerId, $pull }) : appliqués aussi.
+    const plain = Object.fromEntries(Object.entries(update).filter(([key]) => !key.startsWith('$')));
+    Object.assign(doc, update.$set || {}, plain);
 }
 
 module.exports = {

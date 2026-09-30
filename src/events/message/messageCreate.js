@@ -6,20 +6,28 @@ const AutomodService = require('../../services/automodService');
 const AntiraidService = require('../../services/antiraidService');
 const EmbedHelper = require('../../utils/embedBuilder');
 const { getGuildSettings } = require('../../utils/guildSettings');
-const { hasCustomCommandPermission } = require('../../utils/commandPermissions');
+const BlacklistService = require('../../services/blacklistService');
+const MessageAutomation = require('../../services/messageAutomationService');
+const Logger = require('../../utils/logger');
+const { accessContext, commandAccess } = require('../../utils/commandAccess');
+const { context, presentationMessage } = require('../../utils/commandPresentation');
 
 module.exports = {
     name: 'messageCreate',
     async run(client, message) {
-        if (message.author.bot) return;
+        if (await BlacklistService.isBlocked(message.author.id)) return;
 
         if (!message.guild) {
-            await handleDM(client, message);
+            if (!message.author.bot) await handleDM(client, message);
             return;
         }
 
         const settings = await getGuildSettings(client, message.guild.id);
         message.guildSettings = settings;
+        if (message.author.bot) {
+            await MessageAutomation.onMessage(message, settings);
+            return;
+        }
 
         const lang = settings.language || client.defaultLanguage || 'fr';
         message.t = (key, vars) => client.translate(lang, key, vars);
@@ -38,6 +46,10 @@ module.exports = {
             if (antiEveryoneBlocked) return;
         }
 
+        // Les protections restent bloquantes, pas les réactions décoratives.
+        void MessageAutomation.onMessage(message, settings).catch(error => {
+            Logger.error('[MessageAutomation]', error.message);
+        });
         const prefix = settings.prefix || client.prefix;
         const usedPrefix = content.startsWith('=')
             ? '='
@@ -51,7 +63,7 @@ module.exports = {
 
         if (!command && args.length > 0) {
             const twoWordName = `${commandName} ${args[0].toLowerCase()}`;
-            const twoWordCommand = client.commands.get(twoWordName);
+            const twoWordCommand = client.commands.get(twoWordName) || client.commands.get(client.aliases.get(twoWordName));
             if (twoWordCommand) {
                 command = twoWordCommand;
                 args.shift();
@@ -64,52 +76,34 @@ module.exports = {
         }
 
         if (command) {
-            const isBotOwner = client.botOwners.has(message.author.id) || client.owners?.has(message.author.id);
-            const isServerOwner = message.guild.ownerId === message.author.id || settings.owners?.includes(message.author.id);
-            const canBypassPublicRestrictions = isBotOwner || isServerOwner || message.member.permissions.has('ManageGuild');
-
-            if (isCommandRestrictedInChannel(settings, message.channelId) && !canBypassPublicRestrictions) {
-                return message.channel.send({
-                    embeds: [EmbedHelper.error('Les commandes sont désactivées dans ce salon.')],
-                });
-            }
-
-            if (command.ownerOnly && !isBotOwner) return;
-
-            if (command.disabled && !isBotOwner) {
-                return message.channel.send({
-                    embeds: [EmbedHelper.error('Cette commande est actuellement désactivée sur le bot.')],
-                });
-            }
-
-            if (command.serverOwnerOnly && !isServerOwner) {
-                return message.channel.send({ embeds: [EmbedHelper.error('Vous devez être propriétaire du serveur pour utiliser cette commande.')] });
-            }
-
-            if (!isBotOwner) {
-                const hasNativePermissions = !command.permissions?.length || message.member.permissions.has(command.permissions);
-                const hasCustomPermissions = hasCustomCommandPermission(settings, message.member, command);
-                if (!hasNativePermissions && !hasCustomPermissions) {
-                    return message.channel.send({ embeds: [EmbedHelper.error(`Vous n'avez pas la permission \`${command.permissions.join(', ')}\` pour utiliser cette commande.`)] });
-                }
-            }
-
-            if (command.botPermissions?.length && !message.guild.members.me.permissions.has(command.botPermissions)) {
-                return message.channel.send({ embeds: [EmbedHelper.error(`Le bot a besoin de la permission \`${command.botPermissions.join(', ')}\` pour fonctionner.`)] });
-            }
-
-            if (command.cooldown && !isBotOwner) {
-                const remaining = client.cache.checkCooldown(message.author.id, command.name);
-                if (remaining > 0) {
-                    return message.channel.send({
-                        embeds: [EmbedHelper.error(`⏳ Attendez encore **${(remaining / 1000).toFixed(1)}s** avant de réutiliser \`${usedPrefix}${command.name}\`.`)]
-                    }).then(m => setTimeout(() => m.delete().catch(() => {}), 4000));
-                }
-                client.cache.setCooldown(message.author.id, command.name, command.cooldown * 1000);
-            }
-
+            const typing = setTimeout(() => {
+                void message.channel.sendTyping().catch(() => {});
+            }, 800);
+            typing.unref?.();
             try {
-                await command.run(client, message, args);
+                // Tout ce qui suit (accès, cooldown, confirmation, exécution) est
+                // désormais dans le même try/catch : avant ce correctif, une erreur
+                // levée par accessContext/commandAccess (ex: permission Discord.js
+                // invalide sur une commande) sortait de ce bloc, était avalée en
+                // silence par le wrapper d'événements (eventHandler.js), et
+                // l'utilisateur ne recevait JAMAIS de réponse ni de message d'erreur.
+                const PermissionsHelper = require('../../utils/permissions');
+                const isBotOwner = PermissionsHelper.isBotOwner(client, message.author.id);
+                const denial = commandAccess(command, await accessContext(client, message.member, settings, message.channelId));
+                if (denial) return message.channel.send({ embeds: [EmbedHelper.error(denial)] });
+
+                if (command.cooldown && !isBotOwner) {
+                    const remaining = client.cache.checkCooldown(message.author.id, command.name);
+                    if (remaining > 0) {
+                        return message.channel.send({
+                            embeds: [EmbedHelper.error(`⏳ Attendez encore **${(remaining / 1000).toFixed(1)}s** avant de réutiliser \`${usedPrefix}${command.name}\`.`)]
+                        }).then(m => setTimeout(() => m.delete().catch(() => {}), 4000));
+                    }
+                    client.cache.setCooldown(message.author.id, command.name, command.cooldown * 1000);
+                }
+
+                const wrapped = presentationMessage(MessageAutomation.commandMessage(message, command, settings), command);
+                await context.run({ command, prefix: usedPrefix }, () => command.run(client, wrapped, args));
             } catch (error) {
                 require('../../utils/logger').error(`Erreur commande ${command.name}:`, { message: error.message, stack: error.stack });
                 const LogDispatcher = require('../../utils/logDispatcher');
@@ -119,35 +113,33 @@ module.exports = {
                     `Salon: ${message.channel}`,
                     `Erreur: \`${String(error.message).slice(0, 500)}\``,
                 ].join('\n'));
+                await message.channel.send({ content: 'Une erreur est survenue lors de l\'exécution de la commande.' }).catch(() => {});
                 await LogDispatcher.errors(message.guild, errorEmbed);
-                message.channel.send({ content: 'Une erreur est survenue lors de l\'exécution de la commande.' }).catch(() => {});
+            } finally {
+                clearTimeout(typing);
             }
             return;
         }
 
         const custom = await CustomCommand.findOne({ guildId: message.guild.id, name: commandName });
         if (custom) {
+            // Mentions jamais autorisées dans la réponse : un owner malveillant (ou un
+            // hook compromis) pourrait utiliser l'anti-ghostping pour mentionner @everyone.
+            const sendOptions = { allowedMentions: { parse: [] } };
             if (custom.embed) {
                 try {
                     const embedData = JSON.parse(custom.response);
                     const embed = new EmbedBuilder(embedData);
-                    return message.channel.send({ embeds: [embed] });
+                    return message.channel.send({ ...sendOptions, embeds: [embed] });
                 } catch {
-                    return message.channel.send(custom.response);
+                    return message.channel.send({ ...sendOptions, content: String(custom.response).slice(0, 2000) });
                 }
             }
-            return message.channel.send(custom.response);
+            return message.channel.send({ ...sendOptions, content: String(custom.response).slice(0, 2000) });
         }
     }
 };
 
 async function handleDM(client, message) {
     await message.channel.send('Les messages privés ne sont pas supportés pour le moment.');
-}
-
-function isCommandRestrictedInChannel(settings, channelId) {
-    const moderation = settings?.moderation;
-    if (!moderation) return false;
-    if (moderation.publicCommands === false) return true;
-    return Array.isArray(moderation.restrictedChannels) && moderation.restrictedChannels.includes(channelId);
 }

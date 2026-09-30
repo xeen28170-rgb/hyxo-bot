@@ -61,10 +61,14 @@ module.exports = {
             guildId: message.guild.id, userId: member.id,
             moderatorId: message.author.id, type: duration ? 'tempmute' : 'mute',
             reason, duration,
+            metadata: { useTimeout: Boolean(useTimeout), muteRoleId: settings?.moderation?.muteRole },
         });
 
-        await ModerationService.sendDM(member.user, duration ? 'tempmute' : 'mute', message.guild, reason, message.author, duration);
-        await ModerationService.sendModLog(client, message.guild, sanction, member.user, message.author, settings);
+        // DM + log en arrière-plan : la confirmation ne doit pas attendre deux appels Discord de plus.
+        void Promise.all([
+            ModerationService.sendDM(member.user, duration ? 'tempmute' : 'mute', message.guild, reason, message.author, duration),
+            ModerationService.sendModLog(client, message.guild, sanction, member.user, message.author, settings),
+        ]).catch(() => {});
 
         const msg = duration
             ? message.t('moderation.mute.temp_success', { user: member.user.tag, duration: Helpers.formatDuration(duration) })

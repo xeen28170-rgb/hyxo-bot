@@ -3,6 +3,7 @@
 const Blacklist = require('../../models/Blacklist');
 const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
+const BlacklistService = require('../../services/blacklistService');
 
 module.exports = {
     name: 'bl',
@@ -28,8 +29,8 @@ module.exports = {
             { upsert: true }
         );
 
-        message.guild.members.ban(target.id, { reason: `[Blacklist Bot] ${reason}` }).catch(() => {});
+        const result = await BlacklistService.enforceUser(client, target.id);
 
-        return message.channel.send({ embeds: [EmbedHelper.success(`<@${target.id}> a été ajouté à la blacklist.`)] });
+        return message.channel.send({ embeds: [EmbedHelper.success(`<@${target.id}> ajoute a la blacklist. Serveurs proteges : ${result.banned}. Echecs a reessayer : ${result.failed}.`)] });
     },
 };

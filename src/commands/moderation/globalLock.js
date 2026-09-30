@@ -1,6 +1,7 @@
 'use strict';
 
 const EmbedHelper = require('../../utils/embedBuilder');
+const { mapLimit } = require('../../utils/concurrency');
 
 module.exports = {
     name: 'global-lock',
@@ -20,25 +21,18 @@ module.exports = {
         const channels = message.guild.channels.cache.filter(c => c.type === 0 || (action.includes('hide') && c.type === 2));
         const loadingMsg = await message.channel.send({ embeds: [EmbedHelper.info('🌍 Action Globale', `**${action}** en cours sur **${channels.size}** salons...`, { color: 0xFF0000 })] });
 
-        let success = 0;
-        let failed = 0;
+        const overwriteByAction = {
+            lockall: { SendMessages: false },
+            unlockall: { SendMessages: null },
+            hideall: { ViewChannel: false },
+            unhideall: { ViewChannel: null },
+        };
+        const overwrite = overwriteByAction[action];
 
-        for (const ch of channels.values()) {
-            try {
-                if (action === 'lockall') {
-                    await ch.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false });
-                } else if (action === 'unlockall') {
-                    await ch.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: null });
-                } else if (action === 'hideall') {
-                    await ch.permissionOverwrites.edit(message.guild.roles.everyone, { ViewChannel: false });
-                } else if (action === 'unhideall') {
-                    await ch.permissionOverwrites.edit(message.guild.roles.everyone, { ViewChannel: null });
-                }
-                success++;
-            } catch {
-                failed++;
-            }
-        }
+        const results = await mapLimit([...channels.values()], (ch) =>
+            ch.permissionOverwrites.edit(message.guild.roles.everyone, overwrite), 5);
+        const success = results.filter(r => r.ok).length;
+        const failed = results.length - success;
 
         const labels = {
             lockall: 'verrouillés',

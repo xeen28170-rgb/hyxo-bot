@@ -40,7 +40,8 @@ module.exports = {
                 active: true,
             });
 
-            await ModerationService.sendDM(member.user, 'warn', message.guild, reason, message.author, null).catch(() => {});
+            // MP en arrière-plan : la confirmation ne doit pas attendre la création du salon de MP.
+            void ModerationService.sendDM(member.user, 'warn', message.guild, reason, message.author, null).catch(() => {});
             await ModerationService.sendModLog(client, message.guild, sanction, member.user, message.author, message.guildSettings);
 
             const embed = EmbedHelper.info(

@@ -20,6 +20,7 @@ module.exports = {
                 await PrisonService.applyChannelOverwrite(channel, role, settings.prison).catch(() => {});
             }
         }
+        await PrisonService.enforceChannel(client, channel);
         if (await LogDispatcher.isSelfAuditAction(client, channel.guild, AuditLogEvent.ChannelCreate, channel.id)) return;
 
         const embed = EmbedHelper.info('📁 Salon créé', [

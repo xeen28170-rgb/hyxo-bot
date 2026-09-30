@@ -2,6 +2,8 @@
 const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
 const PermissionsHelper = require('../../utils/permissions');
+const { canManageRankRole } = require('../../utils/privateVoice');
+const { getGuildSettings } = require('../../utils/guildSettings');
 
 module.exports = {
     name: 'addrole',
@@ -19,6 +21,8 @@ module.exports = {
 
         const role = Helpers.resolveRole(message.guild, args.slice(1).join(' '));
         if (!role) return message.channel.send({ embeds: [EmbedHelper.error(message.t('general.invalid_role'))] });
+        const settings = message.guildSettings || await getGuildSettings(client, message.guild.id);
+        if (!await canManageRankRole(client, message.member, role, settings)) return message.channel.send({ embeds: [EmbedHelper.error('Votre rang ne permet pas de gerer ce role Owner/WL.')] });
         if (role.managed) return message.channel.send({ embeds: [EmbedHelper.error(message.t('moderation.addrole.managed'))] });
         if (!PermissionsHelper.canManageRole(message.member, role)) return message.channel.send({ embeds: [EmbedHelper.error('Vous ne pouvez pas gérer un rôle égal ou supérieur au vôtre.')] });
         if (!PermissionsHelper.botCanManageRole(message.guild, role)) return message.channel.send({ embeds: [EmbedHelper.error(message.t('general.bot_higher_role'))] });
@@ -27,6 +31,6 @@ module.exports = {
         if (member.roles.cache.has(role.id)) return message.channel.send({ embeds: [EmbedHelper.error(message.t('moderation.addrole.already_has'))] });
 
         await member.roles.add(role, `${message.author.tag}`);
-        await message.channel.send({ embeds: [EmbedHelper.success(message.t('moderation.addrole.success', { role: role.name, user: member.user.tag }))] });
+        await message.channel.send({ embeds: [EmbedHelper.success(`Rôle <@&${role.id}> ajouté à <@${member.id}>.`)], allowedMentions: { parse: [] } });
     },
 };

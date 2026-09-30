@@ -1,5 +1,7 @@
 'use strict';
 
+const { getEmoji } = require('../../config/emojis');
+
 const EmbedHelper = require('../../utils/embedBuilder');
 const PermissionsHelper = require('../../utils/permissions');
 
@@ -97,9 +99,9 @@ module.exports = {
                 }
                 try {
                     await channel.send({ content: `**[Bot Owner]** ${m.content}`, allowedMentions: { parse: [] } });
-                    await m.react('✅').catch(() => {});
+                    await m.react(getEmoji('SUCCESS')).catch(() => {});
                 } catch {
-                    await m.react('❌').catch(() => {});
+                    await m.react(getEmoji('ERROR')).catch(() => {});
                 }
             });
 

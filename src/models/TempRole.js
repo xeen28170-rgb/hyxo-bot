@@ -46,6 +46,13 @@ function save() {
 }
 
 module.exports = {
+    upsert: async ({ guildId, userId, roleId, expiresAt }) => {
+        await ensureLoaded();
+        const existing = store.find(r => r.guildId === guildId && r.userId === userId && r.roleId === roleId);
+        if (existing) existing.expiresAt = new Date(expiresAt);
+        else store.push({ _id: _id++, guildId, userId, roleId, expiresAt: new Date(expiresAt), createdAt: new Date() });
+        save();
+    },
     create: async ({ guildId, userId, roleId, expiresAt }) => {
         await ensureLoaded();
         const doc = { _id: _id++, guildId, userId, roleId, expiresAt: new Date(expiresAt), createdAt: new Date() };

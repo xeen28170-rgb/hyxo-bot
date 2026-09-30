@@ -3,6 +3,7 @@
 const Guild = require('../../models/Guild');
 const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
+const { mapLimit } = require('../../utils/concurrency');
 
 module.exports = {
     name: 'muterole',
@@ -41,18 +42,16 @@ module.exports = {
             }
         }
 
-        let updated = 0;
-        for (const channel of message.guild.channels.cache.values()) {
-            if (channel.isTextBased() || channel.isVoiceBased()) {
-                await channel.permissionOverwrites.edit(muteRole, {
-                    SendMessages: false,
-                    AddReactions: false,
-                    Connect: false,
-                    Speak: false,
-                }).catch(() => {});
-                updated++;
-            }
-        }
+        const targets = [...message.guild.channels.cache.values()]
+            .filter(channel => channel.permissionOverwrites && (channel.isTextBased() || channel.isVoiceBased()));
+        const results = await mapLimit(targets, (channel) =>
+            channel.permissionOverwrites.edit(muteRole, {
+                SendMessages: false,
+                AddReactions: false,
+                Connect: false,
+                Speak: false,
+            }), 5);
+        const updated = results.filter(r => r.ok).length;
 
         await Guild.updateOne({ guildId: message.guild.id }, { 'moderation.muteRole': muteRole.id });
         client.cache.invalidateGuild(message.guild.id);

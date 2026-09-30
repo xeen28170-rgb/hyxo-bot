@@ -1,6 +1,7 @@
 'use strict';
 
 const EmbedHelper = require('../../utils/embedBuilder');
+const { mapLimit } = require('../../utils/concurrency');
 
 module.exports = {
     name: 'unhideall',
@@ -12,9 +13,8 @@ module.exports = {
         const channels = message.guild.channels.cache.filter(c => c.type === 0 || c.type === 2);
         await message.channel.send({ embeds: [EmbedHelper.info('👁️ Affichage...', `Réaffichage de **${channels.size}** salons en cours.`)] });
 
-        for (const ch of channels.values()) {
-            await ch.permissionOverwrites.edit(message.guild.roles.everyone, { ViewChannel: null }).catch(() => {});
-        }
+        await mapLimit([...channels.values()], (ch) =>
+            ch.permissionOverwrites.edit(message.guild.roles.everyone, { ViewChannel: null }).catch(() => {}), 5);
 
         message.channel.send({ embeds: [EmbedHelper.success('✅ Tous les salons ont été réaffichés.')] });
     },

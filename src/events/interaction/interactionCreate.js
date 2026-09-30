@@ -7,20 +7,30 @@ const GiveawayService = require('../../services/giveawayService');
 const PermissionsHelper = require('../../utils/permissions');
 const Guild = require('../../models/Guild');
 const { PermissionFlagsBits } = require('discord.js');
-const { buildCategoryEmbedArray, HELP_CATEGORIES, buildHelpSelectRow, getCommandsForHelpCategory } = require('../../utils/helpEmbeds');
+const { buildHelpPayload, HELP_CATEGORIES, getCommandsForHelpCategory } = require('../../utils/helpEmbeds');
 const { getGuildSettings, invalidateGuildSettings } = require('../../utils/guildSettings');
 const TempVoicePanel = require('../../utils/tempvoicePanel');
+const { isRankRole } = require('../../utils/privateVoice');
+const BlacklistService = require('../../services/blacklistService');
+const { helpClient } = require('../../utils/commandAccess');
+const { expired, disabledRows } = require('../../utils/menuLifetime');
 
 module.exports = {
     name: 'interactionCreate',
     once: false,
     async run(client, interaction) {
         try {
+            if (await BlacklistService.isBlocked(interaction.user.id)) {
+                return interaction.reply({ content: 'Acces refuse : utilisateur blackliste.', flags: 64 });
+            }
             if (interaction.isButton()) {
                 await handleButton(client, interaction);
             }
             if (interaction.isStringSelectMenu()) {
                 await handleSelectMenu(client, interaction);
+            } else if (interaction.isUserSelectMenu() && interaction.customId.startsWith('tvc_')) {
+                // Menus de membres du panneau vocal (les autres UserSelect sont gérés par leurs collectors).
+                await TempVoicePanel.handleSelectMenu(client, interaction);
             }
             if (interaction.isModalSubmit()) {
                 await handleModal(client, interaction);
@@ -42,6 +52,27 @@ module.exports = {
 async function handleButton(client, interaction) {
     const { customId } = interaction;
 
+    if (customId.startsWith('confirm:')) {
+        const { isActiveConfirmation } = require('../../utils/commandConfirmation');
+        if (!isActiveConfirmation(customId, interaction.user.id)) {
+            return interaction.reply({ content: 'Cette confirmation a expiré ou appartient à quelqu’un d’autre.', flags: 64 });
+        }
+        return;
+    }
+    if (/^(embed_|joinset_)/.test(customId) && expired(interaction.message)) {
+        await interaction.reply({ content: 'Ce panneau a expiré. Relancez sa commande.', flags: 64 });
+        await interaction.message.edit({ components: disabledRows(interaction.message.components || []) }).catch(() => {});
+        return;
+    }
+
+    if (customId.startsWith('help_page:')) {
+        const [, , category, page, mode] = customId.split(':');
+        return handleHelpCategory(client, interaction, category, Number(page), mode === 'all');
+    }
+    if (customId.startsWith('help_mode:')) {
+        return handleHelpCategory(client, interaction, 'home', 0, customId.split(':')[2] === 'all');
+    }
+
     if (customId.startsWith('tvc_')) {
         await TempVoicePanel.handleButton(client, interaction);
         return;
@@ -52,7 +83,17 @@ async function handleButton(client, interaction) {
         return;
     }
     if (customId === 'ticket_close') {
-        await TicketService.closeTicket(client, interaction);
+        const { confirmInteraction } = require('../../utils/commandConfirmation');
+        if (!await confirmInteraction(interaction, 'Fermer ce ticket et supprimer son salon')) return;
+        if (await BlacklistService.isBlocked(interaction.user.id)) return;
+        const member = await interaction.guild.members.fetch({ user: interaction.user.id, force: true });
+        const confirmed = new Proxy(interaction, { get(target, key) {
+            if (key === 'member') return member;
+            if (key === 'reply') return payload => target.followUp(payload);
+            const value = Reflect.get(target, key, target);
+            return typeof value === 'function' ? value.bind(target) : value;
+        } });
+        await TicketService.closeTicket(client, confirmed);
         return;
     }
     if (customId === 'ticket_claim') {
@@ -82,20 +123,23 @@ async function handleButton(client, interaction) {
         if (!roleName) return interaction.reply({ content: '❌ Rôle inconnu.', flags: 64 });
         const role = interaction.guild.roles.cache.find(r => r.name.toLowerCase() === roleName.toLowerCase());
         if (!role) return interaction.reply({ content: `❌ Le rôle **${roleName}** n'existe pas.`, flags: 64 });
-        if (!PermissionsHelper.botCanManageRole(interaction.guild, role) || !PermissionsHelper.isSafeSelfAssignableRole(role)) {
+        const settings = await getGuildSettings(client, interaction.guild.id);
+        if (isRankRole(role, settings) || !PermissionsHelper.botCanManageRole(interaction.guild, role) || !PermissionsHelper.isSafeSelfAssignableRole(role)) {
             return interaction.reply({ content: '❌ Ce rôle ne peut pas être attribué automatiquement.', flags: 64 });
         }
         const member = interaction.member;
+        // Acquitte d'abord : ajouter/retirer un rôle est un appel Discord qui peut dépasser les 3s.
+        await interaction.deferReply({ flags: 64 });
         try {
             if (member.roles.cache.has(role.id)) {
                 await member.roles.remove(role);
-                await interaction.reply({ content: `✅ Rôle **${role.name}** retiré.`, flags: 64 });
+                await interaction.editReply({ content: `✅ Rôle **${role.name}** retiré.` });
             } else {
                 await member.roles.add(role);
-                await interaction.reply({ content: `✅ Rôle **${role.name}** ajouté.`, flags: 64 });
+                await interaction.editReply({ content: `✅ Rôle **${role.name}** ajouté.` });
             }
         } catch {
-            await interaction.reply({ content: '❌ Impossible de gérer ce rôle.', flags: 64 });
+            await interaction.editReply({ content: '❌ Impossible de gérer ce rôle.' });
         }
         return;
     }
@@ -108,28 +152,35 @@ async function handleButton(client, interaction) {
     Logger.debug(`Bouton non géré: ${customId}`);
 }
 
-const embedSessions = new Map();
+const embedSessions = globalThis.__xeenEmbedSessions && globalThis.__xeenEmbedSessions.__data
+    ? globalThis.__xeenEmbedSessions.__data
+    : (globalThis.__xeenEmbedSessions = { __data: new Map() }).__data;
 
 // Purge des sessions d'embed builder abandonnées (l'utilisateur ne clique jamais
 // sur Envoyer/Annuler) pour éviter une fuite mémoire lente sur les gros serveurs.
 const EMBED_SESSION_TTL = 15 * 60 * 1000;
-setInterval(() => {
-    const now = Date.now();
-    for (const [id, session] of embedSessions) {
-        if (now - (session.lastUsed || 0) > EMBED_SESSION_TTL) embedSessions.delete(id);
-    }
-}, 5 * 60 * 1000).unref();
+if (!globalThis.__xeenEmbedCleanupStarted) {
+    globalThis.__xeenEmbedCleanupStarted = true;
+    setInterval(() => {
+        const now = Date.now();
+        for (const [id, session] of embedSessions) {
+            if (now - (session.lastUsed || 0) > EMBED_SESSION_TTL) embedSessions.delete(id);
+        }
+    }, 5 * 60 * 1000).unref();
+}
 
 // Construit la row des boutons de l'embed builder (une seule définition, pas de doublon)
 function buildEmbedBuilderRow(ownerId) {
     const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-    return new ActionRowBuilder().addComponents(
+    return [new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`embed_title:${ownerId}`).setLabel('Titre').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`embed_desc:${ownerId}`).setLabel('Description').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`embed_color:${ownerId}`).setLabel('Couleur').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`embed_image:${ownerId}`).setLabel('Image').setStyle(ButtonStyle.Secondary),
+    ), new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`embed_send:${ownerId}`).setLabel('Envoyer').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`embed_cancel:${ownerId}`).setLabel('Annuler').setStyle(ButtonStyle.Danger),
-    );
+    )];
 }
 
 async function handleEmbedBuilder(client, interaction) {
@@ -197,7 +248,7 @@ async function handleEmbedBuilder(client, interaction) {
     const filter = m => m.author.id === interaction.user.id;
     const collector = interaction.channel.createMessageCollector({ filter, max: 1, time: 30_000 });
 
-    await interaction.followUp({ content: `✏️ **${fieldInfo.label}** — Envoie ta valeur dans ce salon (30 secondes) :`, flags: 64 }).catch(() => {});
+    await interaction.followUp({ content: `✏️ **${fieldInfo.label}** — Envoie ta valeur dans ce salon (30 secondes) :` }).catch(() => {});
 
     collector.on('collect', async (msg) => {
         const val = msg.content.trim();
@@ -207,7 +258,7 @@ async function handleEmbedBuilder(client, interaction) {
             const hex = val.replace('#', '');
             const parsed = parseInt(hex, 16);
             if (isNaN(parsed)) {
-                await interaction.followUp({ content: '❌ Couleur invalide. Format attendu: `#FF0000`', flags: 64 }).catch(() => {});
+                await interaction.followUp({ content: '❌ Couleur invalide. Format attendu: `#FF0000`' }).catch(() => {});
             } else {
                 session.color = parsed;
             }
@@ -224,13 +275,13 @@ async function handleEmbedBuilder(client, interaction) {
 
         await message.edit({
             embeds: [EmbedHelper.info('🎨 Générateur d\'Embed', previewLines.join('\n'), { color: session.color || 0xFF0000 })],
-            components: [buildEmbedBuilderRow(session.ownerId)],
+            components: buildEmbedBuilderRow(session.ownerId),
         }).catch(() => {});
     });
 
     collector.on('end', (collected) => {
         if (collected.size === 0) {
-            interaction.followUp({ content: '⏰ Temps écoulé.', flags: 64 }).catch(() => {});
+            interaction.followUp({ content: '⏰ Temps écoulé.' }).catch(() => {});
         }
     });
 }
@@ -238,7 +289,7 @@ async function handleEmbedBuilder(client, interaction) {
 async function handleSelectMenu(client, interaction) {
     const { customId, values } = interaction;
 
-    if (customId.endsWith('_ban_select')) {
+    if (customId.startsWith('tvc_') && customId.endsWith('_select')) {
         await TempVoicePanel.handleSelectMenu(client, interaction);
         return;
     }
@@ -248,7 +299,7 @@ async function handleSelectMenu(client, interaction) {
         if (interaction.user.id !== authorId) {
             return interaction.reply({ content: '❌ Ce menu d\'aide ne vous est pas destiné.', flags: 64 });
         }
-        await handleHelpCategory(client, interaction, values[0]);
+        await handleHelpCategory(client, interaction, values[0], 0, customId.split(':')[2] === 'all');
         return;
     }
 
@@ -343,7 +394,7 @@ async function handleJoinSettings(client, interaction) {
 
 async function handleModal(client, interaction) {
     const { customId } = interaction;
-    if (customId.endsWith('_rename_modal') || customId.endsWith('_limit_modal')) {
+    if (customId.startsWith('tvc_') && customId.endsWith('_modal')) {
         await TempVoicePanel.handleModal(client, interaction);
         return;
     }
@@ -358,37 +409,31 @@ async function handleModal(client, interaction) {
     }
 }
 
-async function handleHelpCategory(client, interaction, category) {
-    if (!HELP_CATEGORIES[category]) {
+async function handleHelpCategory(client, interaction, category, page = 0, all = false) {
+    const menuOwnerId = interaction.customId.split(':')[1];
+    if (interaction.user.id !== menuOwnerId) {
+        return interaction.reply({ embeds: [EmbedHelper.info('Un menu pour chacun', 'Ce menu appartient à quelqu’un d’autre. Ouvrez le vôtre avec la commande help.')], flags: 64 });
+    }
+    if (expired(interaction.message)) {
+        await interaction.reply({ content: 'Ce menu a expiré. Relancez la commande help.', flags: 64 });
+        await interaction.message.edit({ components: disabledRows(interaction.message.components || []) }).catch(() => {});
+        return;
+    }
+    if (category !== 'home' && !Object.hasOwn(HELP_CATEGORIES, category)) {
         return interaction.reply({ content: '❌ Catégorie inconnue.', flags: 64 }).catch(() => {});
     }
 
     const commands = getCommandsForHelpCategory(client, category);
-    if (!commands.size) {
+    if (category !== 'home' && !commands.size) {
         return interaction.reply({ content: '❌ Catégorie vide.', flags: 64 }).catch(() => {});
     }
 
+    await interaction.deferUpdate();
     const settings = interaction.guild
         ? await getGuildSettings(client, interaction.guild.id, { create: false })
         : null;
     const prefix = settings?.prefix || client.prefix;
-
-    const embeds = buildCategoryEmbedArray(commands, category, prefix, client).slice(0, 10);
-    const menuOwnerId = interaction.isStringSelectMenu() && interaction.customId.startsWith('help_category_select:')
-        ? interaction.customId.split(':')[1]
-        : interaction.user.id;
-    const row = buildHelpSelectRow(client, menuOwnerId);
-
-    if (interaction.deferred || interaction.replied) {
-        await interaction.editReply({ embeds, components: [row] }).catch(() => {});
-        return;
-    }
-
-    if (interaction.message?.editable) {
-        await interaction.deferUpdate().catch(() => {});
-        await interaction.message.edit({ embeds, components: [row] }).catch(() => {});
-        return;
-    }
-
-    await interaction.reply({ embeds, components: [row], flags: 64 }).catch(() => {});
+    const member = interaction.guild ? await interaction.guild.members.fetch(interaction.user.id) : null;
+    const filtered = await helpClient(client, member, settings, interaction.channelId, all);
+    await interaction.editReply(buildHelpPayload(filtered, prefix, menuOwnerId, category, page, all));
 }

@@ -8,7 +8,7 @@ module.exports = {
     description: 'Affiche la liste de tous les mutes en cours sur le serveur',
     permissions: ['ManageMessages'],
     async run(client, message) {
-        const settings = client.cache.getGuild(message.guild.id);
+        const settings = message.guildSettings || client.cache.getGuild(message.guild.id);
         const muteRoleId = settings?.moderation?.muteRole;
         if (!muteRoleId) return message.channel.send({ embeds: [EmbedHelper.error('Rôle muet non configuré.')] });
 

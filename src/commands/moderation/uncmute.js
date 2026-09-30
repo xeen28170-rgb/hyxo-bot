@@ -1,6 +1,7 @@
 'use strict';
 const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
+const Sanction = require('../../models/Sanction');
 
 module.exports = {
     name: 'uncmute',
@@ -18,6 +19,9 @@ module.exports = {
 
         const reason = 'Aucune raison fournie';
         await member.voice.setMute(false, `${message.author.tag} | ${reason}`);
+        for (const sanction of await Sanction.find({ guildId: message.guild.id, userId: member.id, active: true })) {
+            if (['cmute', 'tempcmute'].includes(sanction.type)) await Sanction.updateOne({ _id: sanction._id }, { active: false });
+        }
         message.channel.send({ embeds: [EmbedHelper.success(message.t('moderation.cmute.uncmute_success', { user: member.user.tag, reason }))] });
     },
 };

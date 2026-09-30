@@ -78,4 +78,11 @@ module.exports = {
     },
 };
 
-setInterval(() => module.exports.cleanup(), 60 * 60 * 1000);
+// Purge horaire des strikes expirés (une seule minuterie par processus :
+// un hot-reload du module ne doit pas empiler). `unref()` laisse le process
+// se terminer normalement, y compris sous `node --test`.
+if (!globalThis.__xeenAutomodStrikeCleanupStarted) {
+    globalThis.__xeenAutomodStrikeCleanupStarted = true;
+    const timer = setInterval(() => module.exports.cleanup(), 60 * 60 * 1000);
+    if (timer.unref) timer.unref();
+}

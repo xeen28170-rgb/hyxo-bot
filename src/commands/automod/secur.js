@@ -24,7 +24,9 @@ module.exports = {
     category: 'automod',
     description: 'Ouvre la console sécurité unifiée.',
     usage: '-secur',
-    permissions: ['Administrator'],
+    // Réservé au propriétaire du serveur, aux owners et aux owners du bot :
+    // un simple admin ne doit pas pouvoir se whitelister ou couper les protections.
+    serverOwnerOnly: true,
     botPermissions: ['ManageRoles', 'ViewAuditLog'],
     async run(client, message) {
         return SecurityPanel.open(client, message);

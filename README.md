@@ -1,83 +1,99 @@
-# 🛡️ Gestions Bot — Open Source Discord Bot
+<div align="center">
 
-[![Discord.js](https://img.shields.io/badge/discord.js-v14-blue.svg)](https://discord.js.org)
-[![Node.js](https://img.shields.io/badge/node.js->=18-green.svg)](https://nodejs.org)
+# 🛡️ Xeen
 
-**Gestions** est un bot Discord open source complet et professionnel, offrant des outils avancés de modération, de sécurité antiraid, de gestion de tickets, et d'automatisation.
+**Le bot Discord tout-en-un pour protéger et gérer votre serveur.**
+Modération · Antiraid · Tickets · Backups · Giveaways · Vocaux temporaires
 
----
+[![Inviter Xeen](https://img.shields.io/badge/➕_Inviter_Xeen-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.com/oauth2/authorize?client_id=CLIENT_ID_ICI&scope=bot+applications.commands&permissions=8)
+[![Serveur support](https://img.shields.io/badge/💬_Support-2B2D31?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/LIEN_SUPPORT_ICI)
 
-## ✨ Fonctionnalités Principales
+[![discord.js](https://img.shields.io/badge/discord.js-v14-5865F2)](https://discord.js.org)
+[![Node.js](https://img.shields.io/badge/node.js-%3E%3D18-339933)](https://nodejs.org)
 
-- 🛡️ **Modération Avancée** : Ban, Kick, Mute (vocal & texte), Warns, Clear, Derank.
-- ⚡ **Antiraid & Sécurité** : Protection contre les spams de salons, rôles, webhooks, bans, et bots.
-- 🤖 **Automod** : Détection automatique des liens, spams, insultes et mentions massives.
-- 🎫 **Système de Tickets** : Panels interactifs, transcriptions HTML, prise en charge par le staff.
-- 💾 **Sauvegarde (Backup)** : Sauvegardez et restaurez la structure de votre serveur en un clic.
-- 🎤 **Temp Voice** : Salons vocaux temporaires personnalisables par les utilisateurs.
-- 🎉 **Giveaway** : Système de concours robuste avec reroll et conditions.
-- 🌐 **Multilingue** : Support complet du Français (FR) et de l'Anglais (EN).
+</div>
 
 ---
 
-## 🚀 Installation
+## ✨ Pourquoi Xeen ?
 
-### 1. Prérequis
-- [Node.js](https://nodejs.org/) v18 ou supérieur.
+- **Plus de 140 commandes** en français et en anglais, prêtes à l'emploi.
+- **Une vraie protection antiraid** : seuls les owners et la whitelist échappent aux sanctions.
+- **Tout se configure depuis Discord** avec des menus, des boutons et des embeds. Aucun panel web à gérer.
+- **Gratuit.**
 
-### 2. Clonage et Dépendances
+## 🧰 Fonctionnalités
+
+| | Module | Ce qu'il fait |
+|---|---|---|
+| 🛡️ | **Antiraid & sécurité** | Bloque les créations/suppressions massives de salons, rôles, webhooks, bans et l'ajout de bots. Mode lockdown, anti-derank, anti-comptes récents, whitelist. |
+| 🤖 | **Automod** | Anti-liens, anti-spam, anti-mentions de masse, filtre d'insultes, système de strikes avec sanctions automatiques. |
+| 🔨 | **Modération** | Ban, tempban, kick, mute vocal & texte, timeout, warns, prison, derank, lock/hide de salons, historique des sanctions. |
+| 🎫 | **Tickets & modmail** | Panels interactifs, prise en charge par le staff, transcriptions HTML. |
+| 💾 | **Backups** | Sauvegardez la structure de votre serveur et restaurez-la en un clic, avec backups automatiques. |
+| 🎉 | **Giveaways** | Concours avec conditions, reroll et tirage au sort. |
+| 🎤 | **Vocaux temporaires** | Chaque membre crée et gère son propre salon vocal. |
+| 📊 | **Logs & statistiques** | Logs détaillés (messages, membres, rôles, salons, boosts) et salons de statistiques. |
+| ⚙️ | **Personnalisation** | Préfixe, permissions par commande, commandes personnalisées, rolemenus, embeds, formulaires. |
+
+## 🚀 Démarrage rapide
+
+1. **[Invitez Xeen](https://discord.com/oauth2/authorize?client_id=CLIENT_ID_ICI&scope=bot+applications.commands&permissions=8)** sur votre serveur.
+2. Tapez `-help` pour afficher le menu des commandes.
+3. Configurez la sécurité avec `-secur`.
+
+Besoin d'aide ? Tapez `-support` ou rejoignez le [serveur support](https://discord.gg/LIEN_SUPPORT_ICI).
+
+---
+
+## 🖥️ Hébergement (usage interne)
+
+### Prérequis
+- [Node.js](https://nodejs.org/) v18.17 ou supérieur.
+
+### Installation
 ```bash
-git clone https://github.com/votre-repo/gestions-bot.git
-cd gestions-bot
+git clone https://github.com/blackdream3766/Xeen-Bot.git
+cd Xeen-Bot
 npm install
 ```
 
-### 3. Configuration
-Copiez le fichier `.env.example` en `.env` et remplissez les variables :
+### Configuration
+Créez un fichier `.env` à la racine :
 ```env
-TOKEN=votre_bot_token
-CLIENT_ID=id_du_bot
+TOKEN=token_du_bot
 OWNER_IDS=votre_id,autre_id
+PREFIX=-
+DEFAULT_LANGUAGE=fr
+SUPPORT_URL=https://discord.gg/votre_serveur
 ```
 
-### 4. Lancement
+### Lancement
 ```bash
-# Mode Développement
-npm run dev
-
-# Mode Production
-npm start
-
-# Mode Sharding (pour les gros bots)
-npm run shard
+npm start          # production
+npm run dev        # développement (redémarrage auto)
+npm run shard      # sharding pour les gros bots
 ```
 
----
+Sur un VPS, utilisez [pm2](https://pm2.keymetrics.io/) pour garder le bot en ligne :
+```bash
+pm2 start index.js --name xeen && pm2 save && pm2 startup
+```
 
-## 📂 Structure du Projet
+## 📂 Structure du projet
 
 ```text
-/src
-  /commands     # Commandes organisées par catégories
-  /events       # Gestionnaires d'événements Discord
-  /handlers     # Loaders (Commandes, Événements, Langues)
-  /models       # Schémas de données (JSON)
-  /services     # Logique métier (Antiraid, Automod, etc.)
-  /utils        # Utilitaires (Embeds, Permissions, Logger)
-  /languages    # Fichiers de traduction JSON
-index.js        # Point d'entrée principal
-shard.js        # Gestionnaire de sharding
+src/
+  commands/   Commandes par catégorie
+  events/     Événements Discord
+  handlers/   Chargement des commandes, événements et langues
+  services/   Logique métier (antiraid, automod…)
+  models/     Stockage JSON
+  languages/  Traductions FR / EN
+index.js      Point d'entrée
+shard.js      Gestionnaire de sharding
 ```
 
----
+## 🔒 Code source
 
-## 🛠️ Technologies
-- **Langage** : JavaScript (Node.js)
-- **Framework Bot** : Discord.js v14
-- **Stockage** : JSON (Système de fichiers)
-- **Logs** : Winston (Rotation quotidienne)
-
----
-
-## 📜 Licence
-Ce projet est sous licence MIT. Voir le fichier [LICENSE](LICENSE) pour plus de détails.
+Le code de Xeen est **privé**. Ne partagez jamais ce dépôt ni le fichier `.env`.

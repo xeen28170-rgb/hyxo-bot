@@ -15,6 +15,7 @@ module.exports = {
         if (!role) return message.channel.send({ embeds: [EmbedHelper.error('Veuillez mentionner un rôle ou donner son ID.')] });
 
         await Guild.updateOne({ guildId: message.guild.id }, { 'antiraid.raidPingRole': role.id });
+        client.cache.invalidateGuild(message.guild.id);
         return message.channel.send({ embeds: [EmbedHelper.success(`Le rôle <@&${role.id}> sera mentionné en cas de raid.`)] });
     },
 };

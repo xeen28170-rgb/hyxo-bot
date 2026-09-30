@@ -6,7 +6,9 @@ const { ShardingManager } = require('discord.js');
 
 const totalShards = process.env.TOTAL_SHARDS
     ? Math.max(1, parseInt(process.env.TOTAL_SHARDS, 10) || 1)
-    : 'auto';
+    : 1;
+
+if (totalShards !== 1) throw new Error('Le stockage JSON exige TOTAL_SHARDS=1. Plusieurs shards necessitent un stockage partage transactionnel.');
 
 const manager = new ShardingManager('./index.js', {
     totalShards,

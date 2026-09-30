@@ -19,6 +19,7 @@ module.exports = {
             const target = await Helpers.resolveMember(message.guild, args[1]);
             if (!target) return message.channel.send({ embeds: [EmbedHelper.error('Membre introuvable.')] });
             await Guild.updateOne({ guildId: message.guild.id }, { $addToSet: { 'antiraid.blrankList': target.id } });
+            client.cache.invalidateGuild(message.guild.id);
             return message.channel.send({ embeds: [EmbedHelper.success(`<@${target.id}> ajouté à la blacklist rank.`)] });
         }
 
@@ -26,11 +27,13 @@ module.exports = {
             const target = await Helpers.resolveMember(message.guild, args[1]);
             if (!target) return message.channel.send({ embeds: [EmbedHelper.error('Membre introuvable.')] });
             await Guild.updateOne({ guildId: message.guild.id }, { $pull: { 'antiraid.blrankList': target.id } });
+            client.cache.invalidateGuild(message.guild.id);
             return message.channel.send({ embeds: [EmbedHelper.success(`<@${target.id}> retiré de la blacklist rank.`)] });
         }
 
         if (sub === 'danger' || sub === 'all') {
             await Guild.updateOne({ guildId: message.guild.id }, { 'antiraid.blrankType': sub });
+            client.cache.invalidateGuild(message.guild.id);
             return message.channel.send({ embeds: [EmbedHelper.success(`Blacklist Rank réglée sur les rôles **${sub === 'danger' ? 'dangereux' : 'tous'}**.`)] });
         }
 

@@ -19,11 +19,18 @@ module.exports = {
 
             const prefix = message.guildSettings?.prefix || client.prefix;
             if (!name || !response) return message.channel.send({ embeds: [EmbedHelper.error(`Usage: \`${prefix}custom add <nom> <réponse>\``)] });
-            
+            if (response.length > 2000) {
+                return message.channel.send({ embeds: [EmbedHelper.error('Réponse trop longue (max 2000 caractères).')] });
+            }
+
             let isEmbed = false;
             if (response.startsWith('{') && response.endsWith('}')) {
                 try {
-                    JSON.parse(response);
+                    const parsed = JSON.parse(response);
+                    if (parsed.title !== undefined && typeof parsed.title !== 'string') throw new Error('title doit être une chaîne');
+                    if (parsed.description !== undefined && typeof parsed.description !== 'string') throw new Error('description doit être une chaîne');
+                    if (parsed.fields !== undefined && !Array.isArray(parsed.fields)) throw new Error('fields doit être un tableau');
+                    if (parsed.author?.name !== undefined && typeof parsed.author.name !== 'string') throw new Error('author.name doit être une chaîne');
                     isEmbed = true;
                 } catch {
                     isEmbed = false;

@@ -49,17 +49,58 @@ function cleanupRecentModerationActions() {
     }
 }
 
+function sanitizeEmbedForDiscord(embed) {
+    try {
+        const data = typeof embed?.toJSON === 'function' ? embed.toJSON() : embed;
+        if (!data) return embed;
+
+        if (data.description?.length > 4000) {
+            embed.setDescription(data.description.slice(0, 3990) + '…');
+        }
+
+        const fields = data.fields || [];
+        if (fields.length > 25) {
+            embed.spliceFields(25, fields.length - 25);
+        }
+        // Re-lecture après splice pour tronquer les valeurs trop longues.
+        const finalData = typeof embed?.toJSON === 'function' ? embed.toJSON() : data;
+        for (const field of finalData.fields || []) {
+            if (field.name?.length > 256) field.name = field.name.slice(0, 251) + '…';
+            if (field.value?.length > 1024) field.value = field.value.slice(0, 1019) + '…';
+        }
+    } catch { /* embed non modifiable : on laisse Discord rejeter */ }
+
+    return embed;
+}
+
+// Entrées d'audit reçues en temps réel (guildAuditLogEntryCreate) : évite un appel REST
+// fetchAuditLogs à chaque événement loggé quand l'entrée est déjà arrivée.
+const recentAuditEntries = new Map(); // guildId → [entry]
+const AUDIT_MEMORY_MS = 30 * 1000;
+
+function matchesAudit(entry, type, targetId, maxAgeMs, now) {
+    if (type != null && entry.action !== type) return false;
+    if (now - entry.createdTimestamp > maxAgeMs) return false;
+    return !targetId || entry.targetId === targetId || entry.target?.id === targetId;
+}
+
 class LogDispatcher {
+    static recordAuditEntry(guildId, entry) {
+        if (!guildId || !entry?.createdTimestamp) return;
+        const now = Date.now();
+        const list = (recentAuditEntries.get(guildId) || []).filter(e => now - e.createdTimestamp < AUDIT_MEMORY_MS);
+        list.unshift(entry);
+        recentAuditEntries.set(guildId, list.slice(0, 50));
+    }
+
     static async findRecentAuditEntry(guild, type, targetId = null, maxAgeMs = AUDIT_LOG_TTL_MS) {
+        const now = Date.now();
+        const remembered = (recentAuditEntries.get(guild.id) || []).find(entry => matchesAudit(entry, type, targetId, maxAgeMs, now));
+        if (remembered) return remembered;
+
         const logs = await guild.fetchAuditLogs({ type, limit: 5 }).catch(() => null);
         if (!logs) return null;
-
-        const now = Date.now();
-        return logs.entries.find(entry => {
-            if (now - entry.createdTimestamp > maxAgeMs) return false;
-            if (!targetId) return true;
-            return entry.targetId === targetId || entry.target?.id === targetId;
-        }) || null;
+        return logs.entries.find(entry => matchesAudit(entry, null, targetId, maxAgeMs, Date.now())) || null;
     }
 
     static isSelfAuditEntry(client, entry) {
@@ -105,7 +146,11 @@ class LogDispatcher {
         }
 
         try {
-            const payload = { embeds: [embed], files };
+            sanitizeEmbedForDiscord(embed);
+            // Un log ne doit jamais pinger : seul un rôle mis volontairement dans `content`
+            // (ex: rôle d'alerte raid) est autorisé à notifier.
+            const pingRoles = [...String(options.content || '').matchAll(/<@&(\d+)>/g)].map(m => m[1]);
+            const payload = { embeds: [embed], files, allowedMentions: { parse: [], roles: pingRoles } };
             if (options.content) payload.content = options.content;
             await channel.send(payload);
         } catch (error) {
@@ -192,7 +237,13 @@ class LogDispatcher {
     }
 
     static async errors(guild, embed) {
-        return this.send(guild, 'errorLogs', embed);
+        const settings = await getGuildSettings(guild.client, guild.id, { create: false });
+        if (!settings || !settings.logs?.enabled) return;
+
+        // Pas de salon d'erreurs dédié → on replie sur le salon de logs général
+        // pour ne pas perdre silencieusement les erreurs critiques.
+        const type = settings.logs?.errorLogs ? 'errorLogs' : 'logs';
+        return this.send(guild, type, embed);
     }
 
     static async tickets(guild, embed, files = []) {
@@ -214,7 +265,7 @@ class LogDispatcher {
         }
 
         try {
-            await channel.send({ embeds: [embed], files });
+            await channel.send({ embeds: [embed], files, allowedMentions: { parse: [] } });
         } catch (error) {
             Logger.error(`Error sending ticket log to channel ${channelId}:`, { message: error.message });
         }

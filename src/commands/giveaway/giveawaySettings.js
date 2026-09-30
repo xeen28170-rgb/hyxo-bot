@@ -17,6 +17,8 @@ module.exports = {
             if (!content) return message.channel.send({ embeds: [EmbedHelper.error('Veuillez spécifier un message.\nVariables: `{winners}`, `{prize}`')] });
 
             await Guild.updateOne({ guildId: message.guild.id }, { 'giveaway.winMessage': content });
+            // Sans ça, le message reste celui du cache et le changement n'est pas pris en compte.
+            client.cache.invalidateGuild(message.guild.id);
             return message.channel.send({ embeds: [EmbedHelper.success('Le message de victoire du giveaway a été mis à jour.')] });
         }
 

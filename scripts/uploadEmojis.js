@@ -1,90 +1,127 @@
 'use strict';
 
 /**
- * Upload les images de assets/emojis/ comme "Application Emojis" Discord
- * (emojis propres au bot, utilisables sur tous les serveurs) et met à
- * jour automatiquement src/config/emojis.js avec les IDs obtenus.
+ * Upload des images de `assets/emojis/` comme **Application Emojis** Discord
+ * (propres au bot, utilisables sur tous ses serveurs), puis écriture des IDs
+ * générés dans `src/config/emojis.js`.
  *
- * Usage : node scripts/uploadEmojis.js
+ *   node scripts/uploadEmojis.js --dry-run   # simulate, ne modifie rien
+ *   node scripts/uploadEmojis.js             # upload + patch emojis.js
+ *
+ * Idempotent : un emoji portant le même nom est réutilisé, jamais dupliqué.
+ * Requiert `TOKEN` dans `.env`.
  */
 
-require('dotenv').config();
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
 const { Client, GatewayIntentBits } = require('discord.js');
+const { MANIFEST } = require('./generateEmojis');
 
-const EMOJI_DIR = path.join(__dirname, '..', 'assets', 'emojis');
-const CONFIG_PATH = path.join(__dirname, '..', 'src', 'config', 'emojis.js');
-const VALID_EXT = /\.(png|jpe?g|gif|webp)$/i;
+// Préfixe : évite de réutiliser un ancien emoji d'application du même nom.
+const emojiName = (key) => `x_${key.toLowerCase()}`;
+const fileName = (key) => `${key.toLowerCase()}.png`;
 
-async function main() {
-    if (!process.env.TOKEN?.trim()) {
-        console.error('❌ TOKEN manquant dans .env');
-        process.exit(1);
+const ROOT = path.join(__dirname, '..');
+const ASSETS = path.join(ROOT, 'assets', 'emojis');
+const EMOJIS_FILE = path.join(ROOT, 'src', 'config', 'emojis.js');
+const DRY = process.argv.includes('--dry-run');
+
+// ── .env minimal ──────────────────────────────────────────────────
+(function loadEnv() {
+    const file = path.join(ROOT, '.env');
+    if (!fs.existsSync(file)) return;
+    for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
+        const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+        if (!m) continue;
+        if (process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
     }
+})();
 
-    if (!fs.existsSync(EMOJI_DIR)) {
-        console.error(`❌ Dossier introuvable : ${EMOJI_DIR}`);
-        process.exit(1);
-    }
+const identifier = (e) => `${e.animated ? '<a:' : '<:'}${e.name}:${e.id}>`;
 
-    const files = fs.readdirSync(EMOJI_DIR).filter(f => VALID_EXT.test(f));
-    if (!files.length) {
-        console.error(`❌ Aucune image trouvée dans ${EMOJI_DIR}`);
-        console.error('   Ajoute des fichiers nommés comme les clés de src/config/emojis.js (ex: ban.png).');
-        process.exit(1);
-    }
+/** Remplace `KEY: null` par `KEY: '<:name:id>'` dans le bloc EMOJIS. */
+function patchEmojisFile(ids) {
+    const start = src.indexOf('const EMOJIS = {');
+    const end = src.indexOf('};', start);
+    if (start === -1 || end === -1) throw new Error('Bloc EMOJIS introuvable dans emojis.js');
 
-    console.log(`→ Connexion au bot...`);
-    const client = new Client({ intents: [GatewayIntentBits.Guilds] });
-    await client.login(process.env.TOKEN);
-    await new Promise(resolve => client.once('ready', resolve));
-    console.log(`→ Connecté en tant que ${client.user.tag}\n`);
+    let head = src.slice(0, start);
+    let block = src.slice(start, end + 2);
+    const tail = src.slice(end + 2);
 
-    const existing = await client.application.emojis.fetch();
-    const results = {};
-
-    for (const file of files) {
-        const key = path.basename(file, path.extname(file)).toUpperCase();
-        const name = key.toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 32);
-
-        const already = existing.find(e => e.name === name);
-        if (already) {
-            console.log(`↷ ${key} — déjà présent, réutilisation de <${already.animated ? 'a' : ''}:${already.name}:${already.id}>`);
-            results[key] = already.toString();
-            continue;
-        }
-
-        try {
-            const emoji = await client.application.emojis.create({
-                attachment: path.join(EMOJI_DIR, file),
-                name,
-            });
-            console.log(`✔ ${key} → ${emoji.toString()}`);
-            results[key] = emoji.toString();
-        } catch (err) {
-            console.error(`✘ ${key} — échec de l'upload : ${err.message}`);
+    let patched = 0;
+    for (const [key, value] of Object.entries(ids)) {
+        const re = new RegExp(`(\\b${key}:\\s*)(?:null\\b|'[^']*')`);
+        if (re.test(block)) {
+            block = block.replace(re, `$1'${value}'`);
+            patched++;
         }
     }
-
-    let content = fs.readFileSync(CONFIG_PATH, 'utf8');
-    let updated = 0;
-    for (const [key, value] of Object.entries(results)) {
-        const regex = new RegExp(`\\b${key}:\\s*null,`);
-        if (regex.test(content)) {
-            content = content.replace(regex, `${key}: '${value}',`);
-            updated++;
-        } else {
-            console.warn(`⚠ Clé "${key}" absente (ou déjà remplie) dans emojis.js — vérifie manuellement.`);
-        }
-    }
-    fs.writeFileSync(CONFIG_PATH, content, 'utf8');
-
-    console.log(`\n${updated} clé(s) mise(s) à jour dans src/config/emojis.js.`);
-    process.exit(0);
+    fs.writeFileSync(EMOJIS_FILE, head + block + tail, 'utf8');
+    return patched;
 }
 
-main().catch(err => {
-    console.error('Erreur fatale :', err);
-    process.exit(1);
-});
+let src = fs.readFileSync(EMOJIS_FILE, 'utf8');
+
+(async () => {
+    const token = (process.env.TOKEN || '').trim();
+    if (!token) {
+        console.error('✖ TOKEN manquant dans .env');
+        process.exit(1);
+    }
+
+    const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+    client.once('clientReady', async () => {
+        try {
+            const keys = Object.keys(MANIFEST);
+            const files = keys.filter((k) => fs.existsSync(path.join(ASSETS, fileName(k))));
+            const missing = keys.filter((k) => !files.includes(k));
+
+            console.log(`Application : ${client.user.tag}`);
+            console.log(`Images à traiter : ${files.length}/${keys.length}${missing.length ? ` — absentes: ${missing.join(', ')}` : ''}\n`);
+            if (DRY) console.log('Mode simulation (--dry-run) : rien ne sera modifié.\n');
+
+            const existing = await client.application.emojis.fetch();
+            const byName = new Map();
+            for (const [, e] of existing) byName.set(e.name, e);
+
+            console.log(`Emojis d'application déjà présents : ${existing.size}`);
+
+            const ids = {};
+            let created = 0;
+            for (const key of files) {
+                const name = emojiName(key);
+                let emoji = byName.get(name);
+
+                if (emoji) {
+                    console.log(`  = ${key.padEnd(18)} réutilisé ${identifier(emoji)}`);
+                } else if (DRY) {
+                    console.log(`  + ${key.padEnd(18)} serait créé (nom: ${name})`);
+                    continue;
+                } else {
+                    emoji = await client.application.emojis.create({
+                        attachment: path.join(ASSETS, fileName(key)),
+                        name,
+                    });
+                    byName.set(name, emoji);
+                    created++;
+                    console.log(`  ✔ ${key.padEnd(18)} créé ${identifier(emoji)}`);
+                }
+                ids[key] = identifier(emoji);
+            }
+
+            if (!DRY && Object.keys(ids).length) {
+                const patched = patchEmojisFile(ids);
+                console.log(`\nsrc/config/emojis.js mis à jour : ${patched} clé(s) écrite(s).`);
+            }
+
+            console.log(`\n${created} emoji(s) créé(s).`);
+            process.exit(0);
+        } catch (err) {
+            console.error('✖ Échec :', err.message);
+            process.exit(1);
+        }
+    });
+
+    await client.login(token);
+})();

@@ -9,8 +9,8 @@ module.exports = {
     aliases: ['antivanity', 'antidownurl', 'protectedown'],
     category: 'automod',
     description: 'Protège l\'URL vanity du serveur contre les changements. Toute tentative (hors owner bot) = ban automatique.',
-    usage: '-antidown <on|off|restore|wl add/remove <id>>',
-    permissions: ['Administrator'],
+    usage: '-antidown <on|off|view|restore on/off>',
+    serverOwnerOnly: true,
     botPermissions: ['BanMembers', 'ManageGuild', 'ViewAuditLog'],
     async run(client, message, args) {
         const sub = (args[0] || '').toLowerCase();

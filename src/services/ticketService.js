@@ -46,6 +46,8 @@ function isTicketStaff(settings, member) {
         || member.permissions.has(PermissionFlagsBits.ManageChannels);
 }
 
+const ticketCreateLocks = new Map();
+
 const TicketService = {
     /**
      * Envoyer le panneau de création de ticket
@@ -60,7 +62,8 @@ const TicketService = {
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId('ticket_create')
-                .setLabel('📩 Créer un ticket')
+                .setLabel('Créer un ticket')
+                .setEmoji(getEmoji('MAIL'))
                 .setStyle(ButtonStyle.Primary)
         );
 
@@ -72,91 +75,102 @@ const TicketService = {
      */
     async createTicket(client, interaction) {
         const { guild, user } = interaction;
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: 64 });
 
-        const settings = await getGuildSettings(client, guild.id, { create: false });
-        if (!settings?.tickets?.enabled) {
-            return interaction.editReply({ content: `${getEmoji('ERROR')} Le système de tickets est désactivé.` });
+        const lockKey = `${guild.id}:${user.id}`;
+        if (ticketCreateLocks.has(lockKey)) {
+            return interaction.editReply({ content: `${getEmoji('ERROR')} Une création de ticket est déjà en cours…` });
         }
+        ticketCreateLocks.set(lockKey, Date.now());
+        try {
+            const settings = await getGuildSettings(client, guild.id, { create: false });
+            if (!settings?.tickets?.enabled) {
+                return interaction.editReply({ content: `${getEmoji('ERROR')} Le système de tickets est désactivé.` });
+            }
 
-        const activeStatus = { $ne: 'closed' };
-        const existingTicket = await Ticket.findOne({ guildId: guild.id, userId: user.id, status: activeStatus });
-        if (existingTicket) {
-            return interaction.editReply({
-                content: `${getEmoji('ERROR')} Vous avez déjà un ticket ouvert: <#${existingTicket.channelId}>`,
+            const activeStatus = { $ne: 'closed' };
+            const existingTicket = await Ticket.findOne({ guildId: guild.id, userId: user.id, status: activeStatus });
+            if (existingTicket) {
+                return interaction.editReply({
+                    content: `${getEmoji('ERROR')} Vous avez déjà un ticket ouvert: <#${existingTicket.channelId}>`,
+                });
+            }
+
+            const openCount = await Ticket.countDocuments({ guildId: guild.id, userId: user.id, status: activeStatus });
+            if (openCount >= (settings.tickets.maxTickets || 1)) {
+                return interaction.editReply({ content: `${getEmoji('ERROR')} Limite de tickets atteinte (${settings.tickets.maxTickets}).` });
+            }
+
+            const ticketId = await Ticket.getNextId(guild.id);
+
+            const permissionOverwrites = [
+                { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+                {
+                    id: user.id,
+                    allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
+                },
+                {
+                    id: client.user.id,
+                    // ReadMessageHistory : indispensable pour générer la transcription.
+                    allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels,
+                        PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.AttachFiles],
+                },
+            ];
+
+            for (const roleId of (settings.tickets.supportRole || [])) {
+                permissionOverwrites.push({
+                    id: roleId,
+                    allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
+                });
+            }
+
+            const channel = await guild.channels.create({
+                name: `ticket-${ticketId}-${user.username}`.toLowerCase().replace(/[^a-z0-9-]/g, ''),
+                type: ChannelType.GuildText,
+                parent: settings.tickets.category || null,
+                permissionOverwrites,
+                topic: `Ticket de ${user.tag} | ID: ${ticketId}`,
             });
-        }
 
-        const openCount = await Ticket.countDocuments({ guildId: guild.id, userId: user.id, status: activeStatus });
-        if (openCount >= (settings.tickets.maxTickets || 1)) {
-            return interaction.editReply({ content: `${getEmoji('ERROR')} Limite de tickets atteinte (${settings.tickets.maxTickets}).` });
-        }
-
-        const ticketId = await Ticket.getNextId(guild.id);
-
-        const permissionOverwrites = [
-            { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
-            {
-                id: user.id,
-                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
-            },
-            {
-                id: client.user.id,
-                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels],
-            },
-        ];
-
-        for (const roleId of (settings.tickets.supportRole || [])) {
-            permissionOverwrites.push({
-                id: roleId,
-                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
+            await Ticket.create({
+                guildId: guild.id,
+                channelId: channel.id,
+                userId: user.id,
+                ticketId,
+                participants: [user.id],
+                status: 'open',
             });
+
+            const embed = new EmbedBuilder()
+                .setColor(0x5865F2)
+                .setTitle(`${getEmoji('TICKET')} Ticket #${ticketId}`)
+                .setDescription(`Bonjour ${user}, bienvenue dans votre ticket!\n\nDécrivez votre problème et un membre du support vous répondra dès que possible.`)
+                .setTimestamp()
+                .setFooter({ text: `Ticket créé par ${user.tag}` });
+
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('ticket_close').setLabel('Fermer').setEmoji(getEmoji('TICKET_CLOSE')).setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId('ticket_claim').setLabel('Prendre en charge').setEmoji(getEmoji('TICKET_CLAIM')).setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId('ticket_transcript').setLabel('Transcription').setEmoji(getEmoji('TICKET_TRANSCRIPT')).setStyle(ButtonStyle.Secondary)
+            );
+
+            await channel.send({ content: `${user} ${(settings.tickets.supportRole || []).map(r => `<@&${r}>`).join(' ')}`, embeds: [embed], components: [row] });
+
+            const logEmbed = new EmbedBuilder()
+                .setColor(0x57F287)
+                .setTitle(`${getEmoji('TICKET')} Nouveau Ticket`)
+                .addFields(
+                    { name: '👤 Créateur', value: `${user} (\`${user.id}\`)`, inline: true },
+                    { name: '🆔 ID Ticket', value: `#${ticketId}`, inline: true },
+                    { name: '📂 Salon', value: `${channel}`, inline: true }
+                )
+                .setTimestamp();
+            await LogDispatcher.tickets(guild, logEmbed);
+
+            return interaction.editReply({ content: `${getEmoji('SUCCESS')} Votre ticket a été créé: ${channel}` });
+        } finally {
+            ticketCreateLocks.delete(lockKey);
         }
-
-        const channel = await guild.channels.create({
-            name: `ticket-${ticketId}-${user.username}`.toLowerCase().replace(/[^a-z0-9-]/g, ''),
-            type: ChannelType.GuildText,
-            parent: settings.tickets.category || null,
-            permissionOverwrites,
-            topic: `Ticket de ${user.tag} | ID: ${ticketId}`,
-        });
-
-        await Ticket.create({
-            guildId: guild.id,
-            channelId: channel.id,
-            userId: user.id,
-            ticketId,
-            participants: [user.id],
-            status: 'open',
-        });
-
-        const embed = new EmbedBuilder()
-            .setColor(0x5865F2)
-            .setTitle(`${getEmoji('TICKET')} Ticket #${ticketId}`)
-            .setDescription(`Bonjour ${user}, bienvenue dans votre ticket!\n\nDécrivez votre problème et un membre du support vous répondra dès que possible.`)
-            .setTimestamp()
-            .setFooter({ text: `Ticket créé par ${user.tag}` });
-
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('ticket_close').setLabel('Fermer').setEmoji(getEmoji('TICKET_CLOSE')).setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId('ticket_claim').setLabel('Prendre en charge').setEmoji(getEmoji('TICKET_CLAIM')).setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId('ticket_transcript').setLabel('Transcription').setEmoji(getEmoji('TICKET_TRANSCRIPT')).setStyle(ButtonStyle.Secondary)
-        );
-
-        await channel.send({ content: `${user} ${(settings.tickets.supportRole || []).map(r => `<@&${r}>`).join(' ')}`, embeds: [embed], components: [row] });
-
-        const logEmbed = new EmbedBuilder()
-            .setColor(0x57F287)
-            .setTitle(`${getEmoji('TICKET')} Nouveau Ticket`)
-            .addFields(
-                { name: '👤 Créateur', value: `${user} (\`${user.id}\`)`, inline: true },
-                { name: '🆔 ID Ticket', value: `#${ticketId}`, inline: true },
-                { name: '📂 Salon', value: `${channel}`, inline: true }
-            )
-            .setTimestamp();
-        await LogDispatcher.tickets(guild, logEmbed);
-
-        return interaction.editReply({ content: `${getEmoji('SUCCESS')} Votre ticket a été créé: ${channel}` });
     },
 
     /**
@@ -164,15 +178,21 @@ const TicketService = {
      */
     async closeTicket(client, interaction) {
         const ticket = await Ticket.findOne({ channelId: interaction.channelId, status: { $ne: 'closed' } });
-        if (!ticket) return interaction.reply({ content: `${getEmoji('ERROR')} Ce salon n'est pas un ticket ouvert.`, ephemeral: true });
+        if (!ticket) return interaction.reply({ content: `${getEmoji('ERROR')} Ce salon n'est pas un ticket ouvert.`, flags: 64 });
 
         const settings = await getGuildSettings(client, interaction.guild.id, { create: false });
         const isStaff = isTicketStaff(settings, interaction.member);
 
         if (!isStaff && ticket.userId !== interaction.user.id) {
-            return interaction.reply({ content: `${getEmoji('ERROR')} Vous n'avez pas la permission de fermer ce ticket.`, ephemeral: true });
+            return interaction.reply({ content: `${getEmoji('ERROR')} Vous n'avez pas la permission de fermer ce ticket.`, flags: 64 });
         }
 
+        // Marqué fermé tout de suite : un double clic ne doit pas générer deux transcriptions.
+        await Ticket.updateOne({ _id: ticket._id }, {
+            status: 'closed',
+            closedBy: interaction.user.id,
+            closedAt: new Date(),
+        });
         await interaction.reply({ content: `${getEmoji('TICKET_CLOSE')} Fermeture du ticket dans 5 secondes...` });
 
         const createTranscript = loadTranscriptFn();
@@ -190,12 +210,6 @@ const TicketService = {
                 await LogDispatcher.tickets(interaction.guild, logEmbed, [transcript]);
             } catch { /* ignore */ }
         }
-
-        await Ticket.updateOne({ _id: ticket._id }, {
-            status: 'closed',
-            closedBy: interaction.user.id,
-            closedAt: new Date(),
-        });
 
         setTimeout(() => interaction.channel.delete('Ticket fermé').catch(() => {}), 5000);
     },
@@ -219,15 +233,15 @@ const TicketService = {
      */
     async claimTicket(client, interaction) {
         const ticket = await Ticket.findOne({ channelId: interaction.channelId, status: { $ne: 'closed' } });
-        if (!ticket) return interaction.reply({ content: `${getEmoji('ERROR')} Ce salon n'est pas un ticket.`, ephemeral: true });
+        if (!ticket) return interaction.reply({ content: `${getEmoji('ERROR')} Ce salon n'est pas un ticket.`, flags: 64 });
 
         const settings = await getGuildSettings(client, interaction.guild.id, { create: false });
         if (!isTicketStaff(settings, interaction.member)) {
-            return interaction.reply({ content: `${getEmoji('ERROR')} Seul le staff peut prendre en charge ce ticket.`, ephemeral: true });
+            return interaction.reply({ content: `${getEmoji('ERROR')} Seul le staff peut prendre en charge ce ticket.`, flags: 64 });
         }
 
         if (ticket.claimedBy) {
-            return interaction.reply({ content: `${getEmoji('ERROR')} Ce ticket est déjà pris en charge par <@${ticket.claimedBy}>.`, ephemeral: true });
+            return interaction.reply({ content: `${getEmoji('ERROR')} Ce ticket est déjà pris en charge par <@${ticket.claimedBy}>.`, flags: 64 });
         }
 
         await Ticket.updateOne({ _id: ticket._id }, { claimedBy: interaction.user.id, status: 'claimed' });
@@ -251,10 +265,10 @@ const TicketService = {
     async saveTranscript(client, interaction) {
         const createTranscript = loadTranscriptFn();
         if (!createTranscript) {
-            return interaction.reply({ content: `${getEmoji('ERROR')} Module de transcription non disponible.`, ephemeral: true });
+            return interaction.reply({ content: `${getEmoji('ERROR')} Module de transcription non disponible.`, flags: 64 });
         }
 
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: 64 });
 
         try {
             const transcript = await createTranscript(interaction.channel, { limit: -1 });

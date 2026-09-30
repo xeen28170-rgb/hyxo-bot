@@ -15,6 +15,8 @@ module.exports = {
         }
 
         await Guild.updateOne({ guildId: message.guild.id }, { $set: { owners: [] } });
+        // Sans invalidation, le cache garde les anciens owners (et leurs droits) un moment.
+        client.cache.invalidateGuild(message.guild.id);
         message.channel.send({ embeds: [EmbedHelper.success('Tous les owners ont été supprimés.')] });
     },
 };

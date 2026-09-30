@@ -13,19 +13,24 @@ fs.ensureDirSync(logsDir);
 const consoleFormat = winston.format.combine(
     winston.format.timestamp({ format: 'DD/MM/YYYY HH:mm:ss' }),
     winston.format.printf(({ timestamp, level, message, ...meta }) => {
-        const metaStr = Object.keys(meta).length ? '\n' + JSON.stringify(meta, null, 2) : '';
-        
+        // Sanitisation anti log-forging : les nouvelles lignes dans les messages
+        // (pseudos, contenus utilisateur…) sont repliées sur la console pour éviter
+        // qu'un attaquant ne forge des lignes de log falsifiées.
+        const safeMessage = String(message ?? '').replace(/[\r\n]+/g, ' ');
+        const metaStr = Object.keys(meta).length ? '\n' + JSON.stringify(meta, (k, v) =>
+            typeof v === 'string' ? v.replace(/[\r\n]+/g, ' ') : v, 2) : '';
+
         switch (level) {
             case 'error':
-                return `${chalk.gray(`[${timestamp}]`)} ${chalk.red.bold('[ERROR]')} ${chalk.red(message)}${metaStr}`;
+                return `${chalk.gray(`[${timestamp}]`)} ${chalk.red.bold('[ERROR]')} ${chalk.red(safeMessage)}${metaStr}`;
             case 'warn':
-                return `${chalk.gray(`[${timestamp}]`)} ${chalk.yellow.bold('[WARN]')} ${chalk.yellow(message)}${metaStr}`;
+                return `${chalk.gray(`[${timestamp}]`)} ${chalk.yellow.bold('[WARN]')} ${chalk.yellow(safeMessage)}${metaStr}`;
             case 'info':
-                return `${chalk.gray(`[${timestamp}]`)} ${chalk.cyan.bold('[INFO]')} ${chalk.white(message)}${metaStr}`;
+                return `${chalk.gray(`[${timestamp}]`)} ${chalk.cyan.bold('[INFO]')} ${chalk.white(safeMessage)}${metaStr}`;
             case 'debug':
-                return `${chalk.gray(`[${timestamp}]`)} ${chalk.magenta.bold('[DEBUG]')} ${chalk.magenta(message)}${metaStr}`;
+                return `${chalk.gray(`[${timestamp}]`)} ${chalk.magenta.bold('[DEBUG]')} ${chalk.magenta(safeMessage)}${metaStr}`;
             default:
-                return `${chalk.gray(`[${timestamp}]`)} ${chalk.green.bold('[LOG]')} ${chalk.white(message)}${metaStr}`;
+                return `${chalk.gray(`[${timestamp}]`)} ${chalk.green.bold('[LOG]')} ${chalk.white(safeMessage)}${metaStr}`;
         }
     })
 );

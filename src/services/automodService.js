@@ -21,7 +21,8 @@ let lastFloodSweep = 0;
 const FLOOD_SWEEP_INTERVAL = 60 * 60 * 1000; // 1 h
 const FLOOD_ENTRY_TTL = 30 * 60 * 1000;      // 30 min
 
-const LINK_REGEX = /(?:https?:\/\/|www\.)[^\s]+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s]*)?/i;
+// Sans http/www, on exige une extension de domaine connue : « ok.merci » n'est pas un lien.
+const LINK_REGEX = /(?:https?:\/\/|www\.)[^\s]+|\b(?:[a-z0-9-]+\.)+(?:com|net|org|fr|io|gg|xyz|me|tv|co|be|ch|ca|de|uk|us|eu|info|app|dev|link|ly|to|ru|es|it|site|online|shop|store|live|pro|biz|club|gl|cc|ws|tk|ml|ga|cf|gq)\b(?:\/[^\s]*)?/i;
 const INVITE_REGEX = /(?:discord\.gg|discord(?:app)?\.com\/invite|invite\.gg|dsc\.gg|discord\.me)\/[a-z0-9-]+/i;
 
 const REASON_TO_MODULE = {
@@ -196,7 +197,11 @@ const AutomodService = {
             const customWords = automod.badwords.words || [];
             const lowerContent = content.toLowerCase();
 
-            let hasBadWord = customWords.some(word => lowerContent.includes(String(word).toLowerCase()));
+            // Mot entier uniquement : « con » ne doit pas bloquer « conseil » ou « content ».
+            let hasBadWord = customWords.some(word => {
+                const escaped = String(word).toLowerCase().trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                return escaped && new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}($|[^\\p{L}\\p{N}])`, 'u').test(lowerContent);
+            });
             if (!hasBadWord) {
                 try { hasBadWord = getFilter().isProfane(content); } catch { /* ignore */ }
             }
@@ -271,52 +276,61 @@ const AutomodService = {
         const lockKey = `${message.guild.id}:${message.author.id}`;
         const prev = strikeLocks.get(lockKey) || Promise.resolve();
         const release = () => strikeLocks.delete(lockKey);
-        const run = prev.then(async () => {
-            try {
-                const userStrikes = await this.getStrikes(message.author.id, message.guild.id);
-                const newCount = userStrikes + 1;
-                await this.setStrikes(message.author.id, message.guild.id, newCount);
+        const run = prev
+            .catch(() => { /* un échec précédent ne doit pas bloquer les strikes suivants */ })
+            .then(async () => {
+                try {
+                    const userStrikes = await this.getStrikes(message.author.id, message.guild.id);
+                    const newCount = userStrikes + 1;
+                    await this.setStrikes(message.author.id, message.guild.id, newCount);
 
-                const punishment = this.resolvePunishment(automod, newCount, extra.moduleKey || REASON_TO_MODULE[reason]);
-                const maxStrikes = automod.strikes?.ban || 10;
+                    const punishment = this.resolvePunishment(automod, newCount, extra.moduleKey || REASON_TO_MODULE[reason]);
+                    const maxStrikes = automod.strikes?.ban || 10;
 
-                await this.logAutomod(client, message, settings, {
-                    reason,
-                    moduleKey: extra.moduleKey || REASON_TO_MODULE[reason],
-                    count: extra.count || 1,
-                    strikes: newCount,
-                    punishment: punishment || 'none',
-                    details: extra.details || {},
-                });
+                    await this.logAutomod(client, message, settings, {
+                        reason,
+                        moduleKey: extra.moduleKey || REASON_TO_MODULE[reason],
+                        count: extra.count || 1,
+                        strikes: newCount,
+                        punishment: punishment || 'none',
+                        details: extra.details || {},
+                    });
 
-                if (punishment) {
-                    await this.executePunishment(client, message, punishment, newCount, reason, settings);
-                    return;
+                    if (punishment) {
+                        await this.executePunishment(client, message, punishment, newCount, reason, settings);
+                        return;
+                    }
+
+                    await sendTemporaryWarning(
+                        message,
+                        `🚫 ${message.author}, violation détectée (${reason}). Strike ${newCount}/${maxStrikes}.`
+                    );
+                } finally {
+                    release();
                 }
-
-                await sendTemporaryWarning(
-                    message,
-                    `🚫 ${message.author}, violation détectée (${reason}). Strike ${newCount}/${maxStrikes}.`
-                );
-            } finally {
-                release();
-            }
-        });
+            });
         strikeLocks.set(lockKey, run);
         await run;
     },
 
     resolvePunishment(automod, strikesCount, moduleKey = null) {
-        const configuredPunishment = moduleKey ? automod?.[moduleKey]?.punishment : null;
-        if (['warn', 'timeout', 'kick', 'ban'].includes(configuredPunishment)) return configuredPunishment;
+        // La sanction du module est un minimum ; les strikes peuvent l'aggraver.
+        // (Avant, la sanction par défaut « warn » court-circuitait toute l'escalade :
+        // un récidiviste n'était jamais timeout/kick/ban.)
+        const SEVERITY = ['warn', 'timeout', 'kick', 'ban'];
+        const configured = moduleKey ? automod?.[moduleKey]?.punishment : null;
 
         const strikes = automod.strikes || { warn: 3, timeout: 5, mute: 5, kick: 7, ban: 10 };
-        if (strikes.ban && strikesCount >= strikes.ban) return 'ban';
-        if (strikes.kick && strikesCount >= strikes.kick) return 'kick';
+        let byStrikes = null;
         const timeoutThreshold = strikes.timeout || strikes.mute;
-        if (timeoutThreshold && strikesCount >= timeoutThreshold) return 'timeout';
-        if (strikes.warn && strikesCount >= strikes.warn) return 'warn';
-        return null;
+        if (strikes.ban && strikesCount >= strikes.ban) byStrikes = 'ban';
+        else if (strikes.kick && strikesCount >= strikes.kick) byStrikes = 'kick';
+        else if (timeoutThreshold && strikesCount >= timeoutThreshold) byStrikes = 'timeout';
+        else if (strikes.warn && strikesCount >= strikes.warn) byStrikes = 'warn';
+
+        const candidates = [configured, byStrikes].filter(p => SEVERITY.includes(p));
+        if (!candidates.length) return null;
+        return candidates.reduce((a, b) => (SEVERITY.indexOf(b) > SEVERITY.indexOf(a) ? b : a));
     },
 
     async executePunishment(client, message, punishment, count, reason, settings) {
@@ -333,30 +347,30 @@ const AutomodService = {
                     const timeoutDuration = Math.min(settings.automod?.timeoutDuration || 60 * 60 * 1000, 28 * 24 * 60 * 60 * 1000);
                     const muteRole = settings.moderation?.muteRole;
                     if (!settings.moderation?.useTimeout && muteRole && member.roles?.add) {
-                        await member.roles.add(muteRole, auditReason).catch(() => {});
+                        await member.roles.add(muteRole, auditReason);
                         await sendTemporaryWarning(message, `🔇 **${member.user.username}** a été mute par l'automod (${count} strikes).`);
                         break;
                     }
                     if (canUseModerationAction(member, 'timeout')) {
-                        await member.timeout(timeoutDuration, auditReason).catch(() => {});
+                        await member.timeout(timeoutDuration, auditReason);
                         await sendTemporaryWarning(message, `⏱️ **${member.user.username}** a été timeout par l'automod (${count} strikes).`);
                     }
                     break;
                 }
                 case 'kick':
                     if (canUseModerationAction(member, 'kick')) {
-                        await sendTemporaryWarning(message, `👢 **${member.user.username}** a été expulsé par l'automod (${count} strikes).`);
                         LogDispatcher.markModerationAction(message.guild.id, 'kick', member.id);
-                        await member.kick(auditReason).catch(() => {});
+                        await member.kick(auditReason);
                         await AutomodStrike.reset({ userId: member.id, guildId: message.guild.id });
+                        await sendTemporaryWarning(message, `👢 **${member.user.username}** a été expulsé par l'automod (${count} strikes).`);
                     }
                     break;
                 case 'ban':
                     if (canUseModerationAction(member, 'ban')) {
-                        await sendTemporaryWarning(message, `🔨 **${member.user.username}** a été banni par l'automod (${count} strikes).`);
                         LogDispatcher.markModerationAction(message.guild.id, 'ban', member.id);
-                        await message.guild.members.ban(member.id, { reason: auditReason, deleteMessageSeconds: 7 * 86400 }).catch(() => {});
+                        await message.guild.members.ban(member.id, { reason: auditReason, deleteMessageSeconds: 7 * 86400 });
                         await AutomodStrike.reset({ userId: member.id, guildId: message.guild.id });
+                        await sendTemporaryWarning(message, `🔨 **${member.user.username}** a été banni par l'automod (${count} strikes).`);
                     }
                     break;
             }

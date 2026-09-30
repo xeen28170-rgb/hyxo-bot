@@ -2,6 +2,7 @@
 
 const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
+const { mapLimit } = require('../../utils/concurrency');
 
 module.exports = {
     name: 'clear',
@@ -16,19 +17,22 @@ module.exports = {
         if (sub === 'webhooks') {
             const webhooks = await message.guild.fetchWebhooks();
             if (!webhooks.size) return message.channel.send({ embeds: [EmbedHelper.error('Aucun webhook trouvé.')] });
-            for (const [, webhook] of webhooks) await webhook.delete().catch(() => {});
+            await mapLimit([...webhooks.values()], (webhook) => webhook.delete(), 5);
             return message.channel.send({ embeds: [EmbedHelper.success(`${webhooks.size} webhooks supprimés.`)] });
         }
 
         if (sub === 'wl' || sub === 'whitelist') {
             const Guild = require('../../models/Guild');
             await Guild.updateOne({ guildId: message.guild.id }, { 'antiraid.whitelist': [] });
+            // Sans invalidation, la whitelist "vidée" restait active dans le cache.
+            client.cache.invalidateGuild(message.guild.id);
             return message.channel.send({ embeds: [EmbedHelper.success('Whitelist vidée.')] });
         }
 
         if (sub === 'bl' || sub === 'blacklist') {
             const Blacklist = require('../../models/Blacklist');
-            if (!client.owners.has(message.author.id)) return message.channel.send({ embeds: [EmbedHelper.error('Permission insuffisante.')] });
+            const PermissionsHelper = require('../../utils/permissions');
+            if (!PermissionsHelper.isBotOwner(client, message.author.id)) return message.channel.send({ embeds: [EmbedHelper.error('Permission insuffisante.')] });
             await Blacklist.deleteMany({});
             return message.channel.send({ embeds: [EmbedHelper.success('Blacklist globale vidée.')] });
         }

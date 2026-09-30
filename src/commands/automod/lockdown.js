@@ -12,8 +12,9 @@ module.exports = {
     permissions: ['ManageGuild'],
     botPermissions: ['ManageChannels'],
 
-    async run(client, message, args, settings) {
+    async run(client, message) {
         const guild = message.guild;
+        const settings = message.guildSettings;
 
         const usedAlias = message.content.trim().split(/\s+/)[0].replace(settings?.prefix || '-', '').toLowerCase();
         const isUnlock = usedAlias === 'unlockdown';

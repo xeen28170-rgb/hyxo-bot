@@ -11,7 +11,12 @@ module.exports = {
     description: 'Change le préfixe par défaut du bot',
     usage: '<nouveau_prefix>',
     async run(client, message, args) {
-        const prefix = args[0];
+        // Filtre les caractères de contrôle (sauts de ligne inclus) pour ne pas
+        // corrompre le .env ni forger des lignes via PREFIX=.
+        const prefix = Array.from((args[0] || '')).filter(ch => {
+            const code = ch.charCodeAt(0);
+            return code >= 32 && code !== 127;
+        }).join('');
         if (!prefix || prefix.length > 5) {
             return message.channel.send({ embeds: [EmbedHelper.error('Préfixe invalide. Maximum 5 caractères.')] });
         }

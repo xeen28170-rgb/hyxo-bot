@@ -6,6 +6,9 @@ const Logger = require('../utils/logger');
 const { getGuildSettings, invalidateGuildSettings } = require('../utils/guildSettings');
 const LogDispatcher = require('../utils/logDispatcher');
 const EmbedHelper = require('../utils/embedBuilder');
+const PrisonPermissions = require('./prisonPermissions');
+const { withKey } = require('../utils/keyedQueue');
+const { mapLimit } = require('../utils/concurrency');
 
 /**
  * Service du système de prison (rôle Alcatraz / Klebs).
@@ -13,8 +16,8 @@ const EmbedHelper = require('../utils/embedBuilder');
  * Principe : le rôle Alcatraz reçoit un deny explicite ViewChannel/Connect sur
  * TOUS les salons et catégories du serveur, SAUF sur la catégorie prison et ses
  * salons (cellule + alcatraz). Le prisonnier ne voit donc QUE la catégorie
- * prison, même s'il possède d'autres rôles (un deny explicite au niveau rôle
- * l'emporte sur les allow des autres rôles). Son retrait restaure l'accès normal.
+ * prison. Des overwrites individuels completent le role pour primer sur les
+ * autorisations des autres roles; ils sont restaures lors de la liberation.
  *
  * Le rôle n'est attribué QUE via les commandes de prison (-prison / -unprison /
  * -unprisonall). Il n'est plus couplé au mute, au kick, au ban ni aux timeouts.
@@ -25,11 +28,23 @@ const EmbedHelper = require('../utils/embedBuilder');
  * pas de ce système.
  */
 const PrisonService = {
+    releasing: new Set(),
+
+    async restorePrisonRole(client, member) {
+        const key = `${member.guild.id}:${member.id}`;
+        if (this.releasing.has(key)) return;
+        const settings = await getGuildSettings(client, member.guild.id, { create: false, useCache: false });
+        if (!settings?.prison?.prisoners?.includes(String(member.id))) return;
+        const roleId = settings.prison.roleId;
+        if (!roleId || this.releasing.has(key)) return;
+        if (!member.roles.cache.has(roleId)) await member.roles.add(roleId, 'Prison: restauration du role retire manuellement');
+        await PrisonPermissions.apply(client, member.guild, member.id);
+    },
     getExceptionSets(prisonSettings = {}) {
         // Visibilité STRICTE : le prisonnier ne voit QUE la catégorie prison
         // (cellule + alcatraz). Tout le reste est bloqué par un deny ViewChannel,
         // y compris les salons de support et les salons publics, malgré les autres
-        // rôles du membre (un deny au niveau rôle l'emporte sur les allow).
+        // roles du membre grace aux overwrites individuels complementaires.
         const categoryIds = new Set([prisonSettings.categoryId].filter(Boolean));
         const channelIds = new Set([prisonSettings.jailChannelId, prisonSettings.voiceChannelId].filter(Boolean));
         return { categoryIds, channelIds };
@@ -49,6 +64,7 @@ const PrisonService = {
      * nouveau salon sur le serveur).
      */
     async applyChannelOverwrite(channel, role, prisonSettings) {
+        if (channel.isThread?.() || !channel.permissionOverwrites) return;
         const isVoice = channel.type === ChannelType.GuildVoice || channel.type === ChannelType.GuildStageVoice;
         const isCategory = channel.type === ChannelType.GuildCategory;
         const exempt = this.isExempt(channel, prisonSettings);
@@ -84,15 +100,22 @@ const PrisonService = {
      */
     async applyDenyOverwrites(guild, role, prisonSettings) {
         let updated = 0, failed = 0;
-        for (const channel of guild.channels.cache.values()) {
+        const channels = [...guild.channels.cache.values()].filter(channel => {
+            if (typeof channel.isThread === 'function' && channel.isThread()) return false;
+            return Boolean(channel.permissionOverwrites);
+        });
+        // En parallèle (limite 5) : sur un gros serveur, appliquer l'overwrite salon
+        // par salon en séquentiel pouvait faire durer le setup/la reconfig plusieurs
+        // dizaines de secondes.
+        await mapLimit(channels, async (channel) => {
             try {
                 await this.applyChannelOverwrite(channel, role, prisonSettings);
                 updated++;
             } catch (err) {
                 failed++;
-                Logger.error(`[Prison] Overwrite échoué sur #${channel.name} (${channel.id}):`, err.message);
+                Logger.error(`[Prison] Overwrite échoué sur #${channel.name} (${channel.id}) [${channel.type}]:`, err.message || err.code || String(err));
             }
-        }
+        }, 5);
         return { updated, failed };
     },
 
@@ -106,6 +129,7 @@ const PrisonService = {
         const prison = settings?.prison;
         if (!prison?.enabled || !prison?.roleId) return { ok: false, code: 'not_configured' };
         if (!member) return { ok: false, code: 'member_missing' };
+        if (member.id === guild.ownerId || member.permissions?.has('Administrator')) return { ok: false, code: 'administrator' };
 
         const role = guild.roles.cache.get(prison.roleId);
         if (!role) return { ok: false, code: 'role_missing' };
@@ -113,12 +137,16 @@ const PrisonService = {
         const alreadyListed = await PrisonStore.isPrisoner(client, guild.id, member.id);
         const alreadyRoled = member.roles.cache.has(role.id);
 
-        if (alreadyListed) return { ok: false, code: 'already_prisoner' };
+        if (alreadyListed) {
+            await this.restorePrisonRoleUnlocked(client, member);
+            return { ok: false, code: 'already_prisoner' };
+        }
 
         // Rôle présent sans être listé (cas legacy/après migration) : on répare la liste
         // sans retirer/rajouter le rôle, et on considère la personne déjà en prison.
         if (alreadyRoled) {
             await PrisonStore.addPrisoner(client, guild.id, member.id);
+            await PrisonPermissions.apply(client, guild, member.id);
             return { ok: false, code: 'already_prisoner' };
         }
 
@@ -129,6 +157,7 @@ const PrisonService = {
 
         // Enregistre le prisonnier (persistant, repris au redémarrage).
         await PrisonStore.addPrisoner(client, guild.id, member.id);
+        await PrisonPermissions.apply(client, guild, member.id);
 
         // Log de placement en prison.
         try {
@@ -163,13 +192,22 @@ const PrisonService = {
 
         if (!wasRole && !wasListed) return { ok: false, code: 'not_prisoner' };
 
-        if (wasRole) {
-            await member.roles.remove(roleId, reason || 'Retrait de prison').catch(err => {
-                Logger.error('[Prison] Impossible de retirer le rôle Alcatraz:', err.message);
-                throw err;
-            });
+        const releaseKey = `${guild.id}:${member.id}`;
+        this.releasing.add(releaseKey);
+        try {
+            await PrisonPermissions.restore(client, guild, member.id);
+            if (wasRole) {
+                await member.roles.remove(roleId, reason || 'Retrait de prison').catch(err => {
+                    Logger.error('[Prison] Impossible de retirer le rôle Alcatraz:', err.message);
+                    throw err;
+                });
+            }
+            await PrisonStore.removePrisoner(client, guild.id, member.id);
+            await Guild.updateOne({ guildId: guild.id }, { $set: { [`prison.memberOverwrites.${member.id}`]: {} } });
+            invalidateGuildSettings(client, guild.id);
+        } finally {
+            this.releasing.delete(releaseKey);
         }
-        await PrisonStore.removePrisoner(client, guild.id, member.id);
 
         // Log de libération de prison.
         try {
@@ -202,25 +240,31 @@ const PrisonService = {
         let released = 0;
         let failed = 0;
 
-        // Libère d'abord ceux qui sont encore sur le serveur.
-        for (const userId of prisoners) {
+        // Libère d'abord ceux qui sont encore sur le serveur. Limite basse (3) car
+        // chaque release() parallélise déjà ses propres appels par salon.
+        await mapLimit(prisoners, async (userId) => {
             try {
                 let member = guild.members.cache.get(userId);
                 if (!member) {
-                    try { member = await guild.members.fetch(userId); } catch { member = null; }
+                    try { member = await guild.members.fetch(userId); } catch (error) {
+                        if (error.code !== 10007) throw error;
+                        member = null;
+                    }
                 }
-                if (member && roleId && member.roles.cache.has(roleId)) {
-                    await member.roles.remove(roleId, reason || 'Libération de tous les prisonniers');
+                if (member && roleId) {
+                    const result = await this.release(client, guild, member, reason);
+                    if (!result.ok && result.code !== 'not_prisoner') throw new Error(result.code);
+                } else {
+                    await PrisonStore.removePrisoner(client, guild.id, userId);
                 }
                 released++;
             } catch (err) {
                 failed++;
                 Logger.error(`[Prison] Libération échouée pour ${userId}:`, err.message);
             }
-        }
+        }, 3);
 
         // Vide la liste persistée (y compris les membres partis).
-        await PrisonStore.clearPrisoners(client, guild.id);
 
         // Log synthétique.
         try {
@@ -309,5 +353,24 @@ function formatDurationLabel(ms) {
     if (h > 0) return `${h}h ${m}m`;
     return `${m}min`;
 }
+
+// Serialiser reparation et liberation pour ne pas reemprisonner un membre libere.
+for (const name of ['restorePrisonRole', 'imprison', 'release']) {
+    const action = PrisonService[name];
+    PrisonService[`${name}Unlocked`] = action;
+    PrisonService[name] = function (client, guildOrMember, ...args) {
+        const member = name === 'restorePrisonRole' ? guildOrMember : args[0];
+        if (!member) return action.call(this, client, guildOrMember, ...args);
+        if (name === 'restorePrisonRole' && this.releasing.has(`${member.guild.id}:${member.id}`)) return Promise.resolve();
+        return withKey(`prison:${member.guild.id}:${member.id}`, () => action.call(this, client, guildOrMember, ...args));
+    };
+}
+
+PrisonService.enforceChannel = async function (client, channel) {
+    const settings = await getGuildSettings(client, channel.guild.id, { create: false });
+    for (const userId of settings?.prison?.prisoners || []) {
+        await withKey(`prison:${channel.guild.id}:${userId}`, () => PrisonPermissions.apply(client, channel.guild, userId, channel));
+    }
+};
 
 module.exports = PrisonService;

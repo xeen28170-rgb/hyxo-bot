@@ -4,6 +4,8 @@ const LogDispatcher = require('../../utils/logDispatcher');
 const EmbedHelper = require('../../utils/embedBuilder');
 const { scheduleStatsUpdate } = require('../../commands/logs/statschannels');
 const Leash = require('../../models/Leash');
+const PrisonService = require('../../services/prisonService');
+const Logger = require('../../utils/logger');
 
 async function handleLeashNick(client, oldMember, newMember) {
     try {
@@ -17,6 +19,16 @@ async function handleLeashNick(client, oldMember, newMember) {
     } catch { /* ignore */ }
 }
 
+
+async function handlePrisonRoleGuard(client, oldMember, newMember) {
+    try {
+        if (!oldMember.roles.cache.some(role => !newMember.roles.cache.has(role.id))) return;
+        await PrisonService.restorePrisonRole(client, newMember);
+    } catch (error) {
+        Logger.error('[Prison] Echec de restauration du role:', error.message);
+    }
+}
+
 module.exports = {
     name: 'guildMemberUpdate',
     async run(client, oldMember, newMember) {
@@ -24,6 +36,7 @@ module.exports = {
 
         await Promise.all([
             handleLeashNick(client, oldMember, newMember),
+            handlePrisonRoleGuard(client, oldMember, newMember),
         ]);
 
         if (oldMember.roles.cache.size !== newMember.roles.cache.size) {

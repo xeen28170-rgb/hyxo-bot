@@ -15,6 +15,8 @@ module.exports = {
 
         if (sub === 'limit' && limit) {
             await Guild.updateOne({ guildId: message.guild.id }, { 'antiraid.creationLimit': limit });
+            // Sans invalidation, l'ancienne limite reste active dans le cache.
+            client.cache.invalidateGuild(message.guild.id);
             return message.channel.send({ embeds: [EmbedHelper.success(`Limite de création de compte réglée sur **${limit}**.`)] });
         }
 

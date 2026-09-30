@@ -3,7 +3,11 @@
 
 require('dotenv').config();
 
-const { Client, GatewayIntentBits, Partials, Collection } = require('discord.js');
+// Un seul processus peut posseder les caches et fichiers JSON du bot.
+const releaseInstanceLock = require('./src/utils/instanceLock').acquireInstanceLock(require('path').join(__dirname, 'data'));
+process.once('exit', releaseInstanceLock);
+
+const { Client, GatewayIntentBits, Partials, Collection, Options } = require('discord.js');
 
 const Logger = require('./src/utils/logger');
 const HandlerLoader = require('./src/handlers/handlerLoader');
@@ -17,26 +21,30 @@ const fs = require('fs');
 const path = require('path');
 
 const client = new Client({
+    // Caches de fonctionnalités jamais utilisées : moins de mémoire et de travail.
+    makeCache: Options.cacheWithLimits({
+        ...Options.DefaultMakeCacheSettings,
+        StageInstanceManager: 0,
+        GuildScheduledEventManager: 0,
+        AutoModerationRuleManager: 0,
+        ThreadMemberManager: 0,
+        GuildInviteManager: 0,
+        GuildStickerManager: 0,
+    }),
+    // Seuls les intents réellement utilisés : chaque intent en trop fait recevoir
+    // et traiter des événements inutiles (ex: « est en train d'écrire »).
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildPresences,
         GatewayIntentBits.GuildModeration,
         GatewayIntentBits.GuildEmojisAndStickers,
-        GatewayIntentBits.GuildIntegrations,
         GatewayIntentBits.GuildWebhooks,
-        GatewayIntentBits.GuildInvites,
         GatewayIntentBits.GuildVoiceStates,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.GuildMessageReactions,
-        GatewayIntentBits.GuildMessageTyping,
         GatewayIntentBits.DirectMessages,
-        GatewayIntentBits.DirectMessageReactions,
-        GatewayIntentBits.DirectMessageTyping,
         GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildScheduledEvents,
-        GatewayIntentBits.AutoModerationConfiguration,
-        GatewayIntentBits.AutoModerationExecution,
     ],
     partials: [
         Partials.Channel,
@@ -63,6 +71,9 @@ const client = new Client({
         retries: 3,
     },
 });
+
+// Rendu « panneau moderne » (Components V2) + emojis Xeen pour tous les messages.
+require('./src/utils/componentsV2').install(client);
 
 client.commands = new Collection();
 client.aliases = new Collection();

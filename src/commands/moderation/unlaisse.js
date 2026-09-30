@@ -1,11 +1,10 @@
 'use strict';
 
 const EmbedHelper = require('../../utils/embedBuilder');
-const PermissionsHelper = require('../../utils/permissions');
 const { getGuildSettings } = require('../../utils/guildSettings');
 const { resolveLeashTarget } = require('../../utils/leashHelper');
 const LeashService = require('../../services/leashService');
-const { isWhitelisted } = require('../../utils/whitelist');
+const { getAccessLevel, LEVEL } = require('../../utils/privateVoice');
 
 module.exports = {
     name: 'unlaisse',
@@ -34,7 +33,7 @@ module.exports = {
 
         // Seul le propriétaire de la laisse (ou owner) peut relâcher.
         const isFollower = existing.followerId === message.author.id;
-        const isOwner = PermissionsHelper.isBotOwner(client, message.author.id) || message.guild.ownerId === message.author.id || message.guildSettings?.owners?.includes(message.author.id) || message.guildSettings?.ownerRoles?.some(roleId => message.member.roles.cache.has(roleId));
+        const isOwner = await getAccessLevel(client, message.member, settings) >= LEVEL.OWNER;
         if (!isFollower && !isOwner) {
             return message.channel.send({ embeds: [EmbedHelper.error('❌ Seul le maître de cette laisse peut la relâcher.')] });
         }
@@ -46,11 +45,5 @@ module.exports = {
 };
 
 async function canUseLeash(client, message, settings) {
-    if (PermissionsHelper.isBotOwner(client, message.author.id)) return true;
-    if (!settings) return false;
-    if (message.guild.ownerId === message.author.id) return true;
-    if (Array.isArray(settings.owners) && settings.owners.includes(message.author.id)) return true;
-    if (Array.isArray(settings.ownerRoles) && settings.ownerRoles.some(roleId => message.member.roles.cache.has(roleId))) return true;
-    const wl = settings.antiraid?.whitelist || [];
-    return isWhitelisted(message.member, message.author.id, wl);
+    return await getAccessLevel(client, message.member, settings) >= LEVEL.WL;
 }
