@@ -87,6 +87,7 @@ function makeDefault(guildId) {
             },
             whitelist: [], blrankList: []
         },
+        honeypot: { enabled: false, channelId: null, punishment: 'softban' },
         antidown: {
             enabled: false,
             vanity: null,

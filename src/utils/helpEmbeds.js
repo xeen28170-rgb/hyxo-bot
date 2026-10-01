@@ -27,6 +27,7 @@ const HELP_CATEGORY_BY_COMMAND = buildHelpCategoryMap({
         'wl',
         'blrank',
         'creation',
+        'honeypot',
         'raidping',
         'lockdown',
         'antispam',

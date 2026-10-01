@@ -4,6 +4,7 @@ const { EmbedBuilder } = require('discord.js');
 const CustomCommand = require('../../models/CustomCommand');
 const AutomodService = require('../../services/automodService');
 const AntiraidService = require('../../services/antiraidService');
+const HoneypotService = require('../../services/honeypotService');
 const EmbedHelper = require('../../utils/embedBuilder');
 const { getGuildSettings } = require('../../utils/guildSettings');
 const BlacklistService = require('../../services/blacklistService');
@@ -28,6 +29,8 @@ module.exports = {
             await MessageAutomation.onMessage(message, settings);
             return;
         }
+
+        if (HoneypotService.isHoneypot(message, settings) && await HoneypotService.handle(client, message, settings)) return;
 
         const lang = settings.language || client.defaultLanguage || 'fr';
         message.t = (key, vars) => client.translate(lang, key, vars);
