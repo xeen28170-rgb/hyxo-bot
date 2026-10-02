@@ -7,7 +7,7 @@ const GiveawayService = require('../../services/giveawayService');
 const PermissionsHelper = require('../../utils/permissions');
 const Guild = require('../../models/Guild');
 const { PermissionFlagsBits } = require('discord.js');
-const { buildHelpPayload, HELP_CATEGORIES, getCommandsForHelpCategory } = require('../../utils/helpEmbeds');
+const { buildHelpPayload, rememberHelpBanner, HELP_CATEGORIES, getCommandsForHelpCategory } = require('../../utils/helpEmbeds');
 const { getGuildSettings, invalidateGuildSettings } = require('../../utils/guildSettings');
 const TempVoicePanel = require('../../utils/tempvoicePanel');
 const { isRankRole } = require('../../utils/privateVoice');
@@ -435,5 +435,5 @@ async function handleHelpCategory(client, interaction, category, page = 0, all =
     const prefix = settings?.prefix || client.prefix;
     const member = interaction.guild ? await interaction.guild.members.fetch(interaction.user.id) : null;
     const filtered = await helpClient(client, member, settings, interaction.channelId, all);
-    await interaction.editReply(buildHelpPayload(filtered, prefix, menuOwnerId, category, page, all));
+    rememberHelpBanner(await interaction.editReply(buildHelpPayload(filtered, prefix, menuOwnerId, category, page, all)));
 }

@@ -75,9 +75,9 @@ module.exports = {
             ? message.t('moderation.mute.temp_success', { user: member.user.tag, duration: Helpers.formatDuration(duration) })
             : message.t('moderation.mute.success', { user: member.user.tag });
 
-        await message.channel.send(await SanctionCard.attach(EmbedHelper.success(`${msg}\n**Raison:** ${reason}`), {
+        await SanctionCard.send(message.channel, EmbedHelper.success(`${msg}\n**Raison:** ${reason}`), {
             type: duration ? 'tempmute' : 'mute', user: member.user, moderator: message.author, reason,
             duration: duration ? Helpers.formatDuration(duration) : null, caseId: sanction.caseId,
-        }));
+        });
     },
 };

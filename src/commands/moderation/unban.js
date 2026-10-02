@@ -39,8 +39,8 @@ module.exports = {
 
         await ModerationService.sendModLog(client, message.guild, sanction, banEntry.user, message.author, message.guildSettings);
 
-        await message.channel.send(await SanctionCard.attach(EmbedHelper.success(message.t('moderation.ban.unban_success', { user: banEntry.user.tag })), {
+        await SanctionCard.send(message.channel, EmbedHelper.success(message.t('moderation.ban.unban_success', { user: banEntry.user.tag })), {
             type: 'unban', user: banEntry.user, moderator: message.author, reason: 'Deuxième chance', caseId: sanction.caseId,
-        }));
+        });
     },
 };

@@ -69,10 +69,10 @@ module.exports = {
             embed.setThumbnail(user.displayAvatarURL({ dynamic: true }));
             embed.setFooter({ text: `Cas #${sanction.caseId}  ·  ID : ${user.id}` });
 
-            await message.channel.send(await SanctionCard.attach(embed, {
+            await SanctionCard.send(message.channel, embed, {
                 type: duration ? 'tempban' : 'ban', user, moderator: message.author, reason,
                 duration: duration ? Helpers.formatDuration(duration) : null, caseId: sanction.caseId,
-            }));
+            });
         } catch (err) {
             Logger.error('Erreur lors du bannissement:', err);
             message.channel.send({ embeds: [EmbedHelper.error(`Erreur lors du bannissement : ${err.message}`)] });

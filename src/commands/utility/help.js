@@ -5,6 +5,7 @@ const { helpClient, commandAccess, accessContext } = require('../../utils/comman
 const { expireMenu } = require('../../utils/menuLifetime');
 const {
     buildHelpPayload,
+    rememberHelpBanner,
     buildHelpSelectRow,
     buildHelpCommandEmbed,
 } = require('../../utils/helpEmbeds');
@@ -37,6 +38,7 @@ module.exports = {
         }
 
         const sent = await message.channel.send(buildHelpPayload(filtered, prefix, message.author.id));
+        rememberHelpBanner(sent);
         expireMenu(sent);
     },
 };

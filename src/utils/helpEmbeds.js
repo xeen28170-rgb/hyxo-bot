@@ -378,16 +378,34 @@ function buildHelpPayload(client, prefix, authorId, category = 'home', requested
     const footer = pages[page].data.footer?.text || '';
     pages[page].setFooter({ text: footer + (all ? ' · Tout le répertoire' : ' · Selon vos accès') });
     // Bannière animée uniquement sur l'accueil ; `attachments: []` la retire en changeant de page.
-    // La bannière est intégrée au code : elle s'affiche même si assets/ n'a pas été envoyé.
     if (category === 'home') {
+        // Déjà envoyée : on réutilise le lien Discord, rien à téléverser.
+        if (bannerLink.url && Date.now() < bannerLink.expires) {
+            pages[page].setImage(bannerLink.url);
+            return { embeds: [pages[page]], components, attachments: [], allowedMentions: { parse: [] } };
+        }
+        // Sinon on joint le fichier (intégré au code, même sans le dossier assets/).
         pages[page].setImage('attachment://' + HELP_BANNER_NAME);
         return { embeds: [pages[page]], components, files: [{ attachment: helpBanner(), name: HELP_BANNER_NAME }], attachments: [], allowedMentions: { parse: [] } };
     }
     return { embeds: [pages[page]], components, attachments: [], allowedMentions: { parse: [] } };
 }
 
+// Lien de la bannière hébergée par Discord après le premier envoi. Les liens signés
+// expirent (paramètre `ex`) : on le renouvelle une heure avant l'échéance.
+const bannerLink = { url: null, expires: 0 };
+
+/** À appeler avec le message de -help envoyé, pour mémoriser le lien de la bannière. */
+function rememberHelpBanner(message) {
+    const attachment = message?.attachments?.find?.(file => file.name === HELP_BANNER_NAME);
+    if (!attachment?.url) return;
+    const ex = Number.parseInt(new URL(attachment.url).searchParams.get('ex') || '', 16);
+    bannerLink.url = attachment.url;
+    bannerLink.expires = (Number.isFinite(ex) ? ex * 1000 : Date.now() + 12 * 3600_000) - 3600_000;
+}
+
 module.exports = {
     HELP_CATEGORIES, HELP_COLOR, formatUsage, classifyCommand, getCommandsForHelpCategory,
     buildCategoryEmbedArray, buildAllCategoryEmbedsFlat, buildHelpMenuEmbed,
-    buildHelpCommandEmbed, buildHelpSelectRow, buildHelpPayload,
+    buildHelpCommandEmbed, buildHelpSelectRow, buildHelpPayload, rememberHelpBanner,
 };

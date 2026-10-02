@@ -53,9 +53,9 @@ module.exports = {
             embed.setThumbnail(member.user.displayAvatarURL({ dynamic: true }));
             embed.setFooter({ text: `Cas #${sanction.caseId}` });
 
-            await message.channel.send(await SanctionCard.attach(embed, {
+            await SanctionCard.send(message.channel, embed, {
                 type: 'warn', user: member.user, moderator: message.author, reason, caseId: sanction.caseId, warnCount,
-            }));
+            });
         } catch (err) {
             Logger.error('Erreur lors de l\'avertissement:', err);
             message.channel.send({ embeds: [EmbedHelper.error(`Une erreur est survenue : ${err.message}`)] });

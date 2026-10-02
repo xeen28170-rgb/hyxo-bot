@@ -36,8 +36,8 @@ module.exports = {
         });
 
         await ModerationService.sendModLog(client, message.guild, sanction, member.user, message.author, message.guildSettings);
-        await message.channel.send(await SanctionCard.attach(EmbedHelper.success(message.t('moderation.mute.unmute_success', { user: member.user.tag, reason })), {
+        await SanctionCard.send(message.channel, EmbedHelper.success(message.t('moderation.mute.unmute_success', { user: member.user.tag, reason })), {
             type: 'unmute', user: member.user, moderator: message.author, reason: 'Sanction levée', caseId: sanction.caseId,
-        }));
+        });
     },
 };
