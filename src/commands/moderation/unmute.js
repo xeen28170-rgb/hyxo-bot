@@ -1,6 +1,7 @@
 'use strict';
 
 const ModerationService = require('../../services/moderationService');
+const SanctionCard = require('../../services/sanctionCard');
 const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
 
@@ -35,6 +36,8 @@ module.exports = {
         });
 
         await ModerationService.sendModLog(client, message.guild, sanction, member.user, message.author, message.guildSettings);
-        message.channel.send({ embeds: [EmbedHelper.success(message.t('moderation.mute.unmute_success', { user: member.user.tag, reason }))] });
+        await message.channel.send(await SanctionCard.attach(EmbedHelper.success(message.t('moderation.mute.unmute_success', { user: member.user.tag, reason })), {
+            type: 'unmute', user: member.user, moderator: message.author, reason: 'Sanction levée', caseId: sanction.caseId,
+        }));
     },
 };

@@ -1,6 +1,7 @@
 'use strict';
 
 const ModerationService = require('../../services/moderationService');
+const SanctionCard = require('../../services/sanctionCard');
 const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
 const LogDispatcher = require('../../utils/logDispatcher');
@@ -49,7 +50,9 @@ module.exports = {
             embed.setThumbnail(member.user.displayAvatarURL({ dynamic: true }));
             embed.setFooter({ text: `Cas #${sanction.caseId}  ·  ID : ${member.id}` });
 
-            message.channel.send({ embeds: [embed] });
+            await message.channel.send(await SanctionCard.attach(embed, {
+                type: 'kick', user: member.user, moderator: message.author, reason, caseId: sanction.caseId,
+            }));
         } catch (err) {
             Logger.error('Erreur lors de l\'expulsion:', err);
             message.channel.send({ embeds: [EmbedHelper.error(`Erreur lors de l'expulsion : ${err.message}`)] });

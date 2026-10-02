@@ -2,6 +2,7 @@
 
 const Logger = require('../../utils/logger');
 const ModerationService = require('../../services/moderationService');
+const SanctionCard = require('../../services/sanctionCard');
 const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
 const LogDispatcher = require('../../utils/logDispatcher');
@@ -68,7 +69,10 @@ module.exports = {
             embed.setThumbnail(user.displayAvatarURL({ dynamic: true }));
             embed.setFooter({ text: `Cas #${sanction.caseId}  ·  ID : ${user.id}` });
 
-            await message.channel.send({ embeds: [embed] });
+            await message.channel.send(await SanctionCard.attach(embed, {
+                type: duration ? 'tempban' : 'ban', user, moderator: message.author, reason,
+                duration: duration ? Helpers.formatDuration(duration) : null, caseId: sanction.caseId,
+            }));
         } catch (err) {
             Logger.error('Erreur lors du bannissement:', err);
             message.channel.send({ embeds: [EmbedHelper.error(`Erreur lors du bannissement : ${err.message}`)] });

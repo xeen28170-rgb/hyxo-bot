@@ -1,6 +1,7 @@
 'use strict';
 
 const ModerationService = require('../../services/moderationService');
+const SanctionCard = require('../../services/sanctionCard');
 const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
 const PermissionsHelper = require('../../utils/permissions');
@@ -74,6 +75,9 @@ module.exports = {
             ? message.t('moderation.mute.temp_success', { user: member.user.tag, duration: Helpers.formatDuration(duration) })
             : message.t('moderation.mute.success', { user: member.user.tag });
 
-        message.channel.send({ embeds: [EmbedHelper.success(`${msg}\n**Raison:** ${reason}`)] });
+        await message.channel.send(await SanctionCard.attach(EmbedHelper.success(`${msg}\n**Raison:** ${reason}`), {
+            type: duration ? 'tempmute' : 'mute', user: member.user, moderator: message.author, reason,
+            duration: duration ? Helpers.formatDuration(duration) : null, caseId: sanction.caseId,
+        }));
     },
 };

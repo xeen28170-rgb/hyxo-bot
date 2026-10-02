@@ -1,6 +1,7 @@
 'use strict';
 
 const ModerationService = require('../../services/moderationService');
+const SanctionCard = require('../../services/sanctionCard');
 const Sanction = require('../../models/Sanction');
 const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
@@ -52,7 +53,9 @@ module.exports = {
             embed.setThumbnail(member.user.displayAvatarURL({ dynamic: true }));
             embed.setFooter({ text: `Cas #${sanction.caseId}` });
 
-            message.channel.send({ embeds: [embed] });
+            await message.channel.send(await SanctionCard.attach(embed, {
+                type: 'warn', user: member.user, moderator: message.author, reason, caseId: sanction.caseId, warnCount,
+            }));
         } catch (err) {
             Logger.error('Erreur lors de l\'avertissement:', err);
             message.channel.send({ embeds: [EmbedHelper.error(`Une erreur est survenue : ${err.message}`)] });

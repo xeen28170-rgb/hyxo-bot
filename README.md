@@ -101,3 +101,4 @@ Le code de Hyxo est **privé**. Ne partagez jamais ce dépôt ni le fichier `.en
 ## Crédits
 
 Emojis animés : [Google Noto Emoji Animation](https://googlefonts.github.io/noto-emoji-animation/), licence CC BY 4.0.
+Polices des fiches de sanction : Chakra Petch, JetBrains Mono et Anton, licence SIL Open Font License.
