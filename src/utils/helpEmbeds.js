@@ -16,6 +16,8 @@ const HELP_CATEGORIES = {
 };
 
 const HELP_COLOR = 0x8C78FA;
+const HELP_BANNER_NAME = 'hyxo-banner.gif';
+const HELP_BANNER_PATH = require('path').join(__dirname, '../../assets/help-banner.gif');
 const { getEmoji } = require('../config/emojis');
 // Commandes mises en avant sur l'accueil (affichées seulement si elles existent).
 const SHORTCUTS = ['secur', 'logs', 'tempvoc', 'ticket', 'giveaway', 'backup'];
@@ -367,7 +369,12 @@ function buildHelpPayload(client, prefix, authorId, category = 'home', requested
     }
     const footer = pages[page].data.footer?.text || '';
     pages[page].setFooter({ text: footer + (all ? ' · Tout le répertoire' : ' · Selon vos accès') });
-    return { embeds: [pages[page]], components, allowedMentions: { parse: [] } };
+    // Bannière animée uniquement sur l'accueil ; `attachments: []` la retire en changeant de page.
+    if (category === 'home') {
+        pages[page].setImage('attachment://' + HELP_BANNER_NAME);
+        return { embeds: [pages[page]], components, files: [{ attachment: HELP_BANNER_PATH, name: HELP_BANNER_NAME }], attachments: [], allowedMentions: { parse: [] } };
+    }
+    return { embeds: [pages[page]], components, attachments: [], allowedMentions: { parse: [] } };
 }
 
 module.exports = {

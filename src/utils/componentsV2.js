@@ -277,8 +277,11 @@ function transform(payload) {
     }
 
     const hasEmbeds = Array.isArray(body.embeds) && body.embeds.length > 0;
-    const hasFiles = Array.isArray(payload.options?.files) && payload.options.files.length > 0;
-    const convertible = hasEmbeds && !hasFiles && !body.poll && !body.sticker_ids?.length;
+    const files = Array.isArray(payload.options?.files) ? payload.options.files : [];
+    // Un fichier affiché comme image de l'embed (attachment://) passe dans la galerie du panneau.
+    const embedImages = new Set((body.embeds || []).map(e => e?.image?.url).filter(Boolean));
+    const filesShownInPanel = files.every(file => embedImages.has('attachment://' + (file?.name ?? file?.attachment?.name)));
+    const convertible = hasEmbeds && filesShownInPanel && !body.poll && !body.sticker_ids?.length;
 
     if (!convertible) {
         // Pas de panneau : on remplace quand même les emojis.
