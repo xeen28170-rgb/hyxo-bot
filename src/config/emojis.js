@@ -157,6 +157,7 @@ const UNICODE_ALIASES = {
     '🔑': 'UNPRISON', '📌': 'NOTE', '🆕': 'SPARKLES', '📦': 'BACKUP', '⚖️': 'SANCTIONS',
     '🧨': 'ALERT', '🎯': 'SEARCH', '💡': 'INFO', '🌊': 'MEMBERS', '🔢': 'STATS',
     '👻': 'HIDE', '📍': 'CHANNEL', '🆔': 'USER', '👨': 'USER', '💼': 'OWNER',
+    '🔎': 'SEARCH', '👋': 'TICKET_CLOSE', '🚪': 'KICK', '😀': 'USER', '⬜': 'OFF', '🎮': 'STAR',
 };
 for (const [key, emoji] of Object.entries(FALLBACK)) {
     // Première clé déclarée prioritaire (ex: ⚠️ → WARNING plutôt que WARN).
