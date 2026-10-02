@@ -19,7 +19,7 @@ const COMMUNITY_COMMANDS = new Set(['suggestion', 'custom', 'customlist', 'custo
 
 const HELP_COLOR = 0x8C78FA;
 const HELP_BANNER_NAME = 'hyxo-banner.gif';
-const HELP_BANNER_PATH = require('path').join(__dirname, '../../assets/help-banner.gif');
+const { helpBanner } = require('./bundledAssets');
 const { getEmoji } = require('../config/emojis');
 // Commandes mises en avant sur l'accueil (affichées seulement si elles existent).
 const SHORTCUTS = ['secur', 'logs', 'tempvoc', 'ticket', 'giveaway', 'backup'];
@@ -378,10 +378,10 @@ function buildHelpPayload(client, prefix, authorId, category = 'home', requested
     const footer = pages[page].data.footer?.text || '';
     pages[page].setFooter({ text: footer + (all ? ' · Tout le répertoire' : ' · Selon vos accès') });
     // Bannière animée uniquement sur l'accueil ; `attachments: []` la retire en changeant de page.
-    // Sans le fichier (oublié lors d'un envoi sur l'hébergeur), l'accueil part sans bannière.
-    if (category === 'home' && require('fs').existsSync(HELP_BANNER_PATH)) {
+    // La bannière est intégrée au code : elle s'affiche même si assets/ n'a pas été envoyé.
+    if (category === 'home') {
         pages[page].setImage('attachment://' + HELP_BANNER_NAME);
-        return { embeds: [pages[page]], components, files: [{ attachment: HELP_BANNER_PATH, name: HELP_BANNER_NAME }], attachments: [], allowedMentions: { parse: [] } };
+        return { embeds: [pages[page]], components, files: [{ attachment: helpBanner(), name: HELP_BANNER_NAME }], attachments: [], allowedMentions: { parse: [] } };
     }
     return { embeds: [pages[page]], components, attachments: [], allowedMentions: { parse: [] } };
 }

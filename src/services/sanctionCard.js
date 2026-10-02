@@ -7,13 +7,11 @@
  * Polices : Chakra Petch, JetBrains Mono, Anton (SIL Open Font License), dans assets/fonts.
  */
 
-const path = require('node:path');
 const { Resvg } = require('@resvg/resvg-js');
 const { GIFEncoder, quantize, applyPalette } = require('gifenc');
 const Logger = require('../utils/logger');
 
-const FONTS = ['ChakraPetch-Bold.ttf', 'JetBrainsMono.ttf', 'Anton.ttf']
-    .map(file => path.join(__dirname, '../../assets/fonts', file));
+const { cardFontFiles } = require('../utils/bundledAssets');
 const W = 800, H = 300;
 
 const STYLES = {
@@ -179,7 +177,7 @@ async function build(input) {
         const avatar = await fetchAvatar(input.user);
         const gif = GIFEncoder();
         for (const frame of frames(style, data)) {
-            const image = new Resvg(card(data, style, avatar, frame), { font: { fontFiles: FONTS, loadSystemFonts: false, defaultFontFamily: 'Chakra Petch' } }).render();
+            const image = new Resvg(card(data, style, avatar, frame), { font: { fontFiles: cardFontFiles(), loadSystemFonts: false, defaultFontFamily: 'Chakra Petch' } }).render();
             const palette = quantize(image.pixels, 256);
             gif.writeFrame(applyPalette(image.pixels, palette), image.width, image.height, { palette, delay: frame.delay || 40 });
             // Laisse respirer la boucle d'événements entre deux images.
