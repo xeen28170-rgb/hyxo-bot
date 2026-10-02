@@ -291,7 +291,7 @@ function buildHelpMenuEmbed(client, prefix = '-') {
             categories.join('\n') || 'Aucune commande accessible dans ce salon.',
         ].join('\n'))
         .setThumbnail(client.user.displayAvatarURL({ size: 256 }))
-        .setFooter({ text: prefix + 'help <commande> pour la fiche détaillée d’une commande' });
+        .setFooter({ text: prefix + 'help <commande> pour la fiche détaillée d’une commande · Emojis : Google Noto (CC BY 4.0)' });
     if (shortcuts.length) embed.addFields({ name: getEmoji('BOLT') + ' Raccourcis', value: shortcuts.join(' · ') });
     return embed;
 }

@@ -15,11 +15,11 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { Client, GatewayIntentBits } = require('discord.js');
-const { MANIFEST } = require('./generateEmojis');
+const { NOTO: MANIFEST } = require('./notoEmojis');
 
-// Préfixe : évite de réutiliser un ancien emoji d'application du même nom.
-const emojiName = (key) => `x_${key.toLowerCase()}`;
-const fileName = (key) => `${key.toLowerCase()}.png`;
+// Préfixe « hx_ » : le pack animé Hyxo ne réutilise pas les anciens emojis fixes « x_ ».
+const emojiName = (key) => `hx_${key.toLowerCase()}`;
+const fileName = (key) => `${key.toLowerCase()}.gif`;
 
 const ROOT = path.join(__dirname, '..');
 const ASSETS = path.join(ROOT, 'assets', 'emojis');

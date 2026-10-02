@@ -97,3 +97,7 @@ shard.js      Gestionnaire de sharding
 ## 🔒 Code source
 
 Le code de Hyxo est **privé**. Ne partagez jamais ce dépôt ni le fichier `.env`.
+
+## Crédits
+
+Emojis animés : [Google Noto Emoji Animation](https://googlefonts.github.io/noto-emoji-animation/), licence CC BY 4.0.
