@@ -3,17 +3,19 @@
 const { EmbedBuilder, StringSelectMenuBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 const HELP_CATEGORIES = {
-    security: { label: 'Sécurité', emoji: '🛡️', description: 'Protections antiraid, whitelist et console Protect.', color: 0x8C78FA },
+    security: { label: 'Protection', emoji: '🛡️', description: 'Antiraid, automod, honeypot, whitelist et backups.', color: 0x8C78FA },
     moderation: { label: 'Modération', emoji: '🔨', description: 'Sanctions, rôles, salons et actions de modération.', color: 0xF2475E },
-    logs: { label: 'Logs', emoji: '📜', description: 'Journaux serveur, sécurité, modération et statistiques.', color: 0xA3ADBA },
-    tickets: { label: 'Tickets', emoji: '🎫', description: 'Support, tickets, panels et modmail.', color: 0x4F95F5 },
-    utility: { label: 'Utilitaires', emoji: '⚙️', description: 'Informations, outils rapides et commandes publiques.', color: 0x2EC4D6 },
-    administration: { label: 'Administration', emoji: '👑', description: 'Configuration serveur, rôles, permissions et gestion.', color: 0xF4B63F },
-    giveaways: { label: 'Giveaways', emoji: '🎉', description: 'Création, gestion et configuration des giveaways.', color: 0xEE62AE },
-    backups: { label: 'Backups', emoji: '💾', description: 'Sauvegardes et restauration de configuration serveur.', color: 0x3FD39C },
-    tempvoc: { label: 'TempVoc', emoji: '🎤', description: 'Salons vocaux temporaires et gestion.', color: 0x2EC4D6 },
+    server: { label: 'Serveur', emoji: '⚙️', description: 'Configuration, logs, statistiques, tickets et vocaux temporaires.', color: 0xF4B63F },
+    community: { label: 'Communauté', emoji: '🎉', description: 'Giveaways, suggestions et commandes personnalisées.', color: 0xEE62AE },
+    utility: { label: 'Infos & outils', emoji: '🔎', description: 'Profils, infos du serveur et outils rapides.', color: 0x2EC4D6 },
     ownerbot: { label: 'Owner Bot', emoji: '🔧', description: 'Commandes réservées aux owners du bot.', color: 0x737B87 },
 };
+
+// Les anciennes rubriques sont regroupées dans les 5 familles ci-dessus.
+const MERGED_CATEGORIES = {
+    backups: 'security', administration: 'server', logs: 'server', tickets: 'server', tempvoc: 'server', giveaways: 'community',
+};
+const COMMUNITY_COMMANDS = new Set(['suggestion', 'custom', 'customlist', 'customtransfer', 'clearcustoms']);
 
 const HELP_COLOR = 0x8C78FA;
 const HELP_BANNER_NAME = 'hyxo-banner.gif';
@@ -204,7 +206,13 @@ function formatUsage(prefix, command) {
 }
 
 function classifyCommand(command) {
-    if (command.helpCategory && HELP_CATEGORIES[command.helpCategory]) return command.helpCategory;
+    if (COMMUNITY_COMMANDS.has(command.name)) return 'community';
+    const key = legacyCategory(command);
+    return MERGED_CATEGORIES[key] || key;
+}
+
+function legacyCategory(command) {
+    if (command.helpCategory && (HELP_CATEGORIES[command.helpCategory] || MERGED_CATEGORIES[command.helpCategory])) return command.helpCategory;
 
     const category = command.category;
     const name = command.name;
