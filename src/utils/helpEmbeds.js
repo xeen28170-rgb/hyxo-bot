@@ -378,7 +378,8 @@ function buildHelpPayload(client, prefix, authorId, category = 'home', requested
     const footer = pages[page].data.footer?.text || '';
     pages[page].setFooter({ text: footer + (all ? ' · Tout le répertoire' : ' · Selon vos accès') });
     // Bannière animée uniquement sur l'accueil ; `attachments: []` la retire en changeant de page.
-    if (category === 'home') {
+    // Sans le fichier (oublié lors d'un envoi sur l'hébergeur), l'accueil part sans bannière.
+    if (category === 'home' && require('fs').existsSync(HELP_BANNER_PATH)) {
         pages[page].setImage('attachment://' + HELP_BANNER_NAME);
         return { embeds: [pages[page]], components, files: [{ attachment: HELP_BANNER_PATH, name: HELP_BANNER_NAME }], attachments: [], allowedMentions: { parse: [] } };
     }
