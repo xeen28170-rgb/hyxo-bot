@@ -1,11 +1,12 @@
 'use strict';
 
-const { AuditLogEvent, PermissionFlagsBits, Routes } = require('discord.js');
+const { AuditLogEvent, EmbedBuilder, PermissionFlagsBits, Routes } = require('discord.js');
 const AntiraidLog = require('../models/AntiraidLog');
 const SecurityLog = require('../models/SecurityLog');
 const Guild = require('../models/Guild');
 const Logger = require('../utils/logger');
 const EmbedHelper = require('../utils/embedBuilder');
+const { getEmoji } = require('../config/emojis');
 const LogDispatcher = require('../utils/logDispatcher');
 const PermissionsHelper = require('../utils/permissions');
 const { isWhitelisted } = require('../utils/whitelist');
@@ -728,47 +729,26 @@ const AntiraidService = {
         if (!settings?.logs?.enabled) return;
         if (!settings.logs?.raidLogs && !settings.logs?.securityLogs) return;
 
-        const actionLabels = {
-            channel:       '📁 Opérations sur les salons',
-            role:          '🎭 Opérations sur les rôles',
-            ban:           '🔨 Bans/Kicks suspects',
-            kick:          '👢 Kicks suspects',
-            unban:         '🔓 Unbans suspects',
-            webhook:       '🔗 Opérations sur les webhooks',
-            update:        '⚙️ Modifications du serveur',
-            deco:          '🎨 Modifications membres suspects',
-            token:         '🔑 Intégrations suspectes',
-            everyone:      '📢 Mentions @everyone/@here',
-            here:          '📣 Mentions @here',
-            bot:           '🤖 Bot non autorisé',
-            mass_join:     '🌊 Mass-join détecté',
-            account_too_new: '🆕 Compte trop récent',
-            lockdown:      '🔒 Lockdown activé',
-            vanity:        '🌐 Changement URL serveur (anti-down)',
+        const titles = {
+            channel: 'Attaque sur les salons stoppée', role: 'Attaque sur les rôles stoppée',
+            ban: 'Bans en masse stoppés', kick: 'Expulsions en masse stoppées', unban: 'Débannissements suspects stoppés',
+            webhook: 'Webhooks suspects stoppés', update: 'Modification du serveur annulée', deco: 'Modifications de membres stoppées',
+            token: 'Intégration suspecte bloquée', everyone: 'Mention @everyone bloquée', here: 'Mention @here bloquée',
+            bot: 'Bot non autorisé bloqué', mass_join: 'Raid stoppé', account_too_new: 'Compte trop récent bloqué',
+            lockdown: 'Serveur verrouillé', vanity: 'Lien du serveur protégé',
         };
+        const punishments = { derank: 'rôles retirés', ban: 'banni', kick: 'expulsé', none: 'aucune', aucune: 'aucune' };
+        const time = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
 
-        const fields = [
-            { name: '⚡ Type', value: actionLabels[action] || action, inline: true },
-            { name: '🔢 Détections', value: `\`${count}\``, inline: true },
-            { name: '🔨 Punition', value: `\`${punishment}\``, inline: true },
-        ];
+        const who = user ? `**${user.tag || user.username || user.id}**` : 'Plusieurs comptes';
+        const lines = [`${who} · ${count} action${count > 1 ? 's' : ''} détectée${count > 1 ? 's' : ''} · sanction : **${punishments[punishment] || punishment}**`];
+        if (extra.detail) lines.push(String(extra.detail).slice(0, 300));
 
-        if (user) {
-            fields.unshift({ name: '👤 Exécuteur', value: `${user.tag || user.id} (\`${user.id}\`)`, inline: false });
-        }
-
-        if (extra.detail) {
-            fields.push({ name: '📝 Détail', value: extra.detail, inline: false });
-        }
-        if (extra.auditAction) {
-            fields.push({ name: '🧾 Audit', value: `\`${extra.auditAction}\``, inline: true });
-        }
-
-        const embed = EmbedHelper.log({
-            title: '🚨 ANTIRAID — Menace Détectée',
-            color: 0xFF2222,
-            fields,
-        });
+        const embed = new EmbedBuilder()
+            .setColor(0xFF2D4B)
+            .setAuthor({ name: `Alerte sécurité · ${time}` })
+            .setTitle(`${getEmoji('ALERT')} ${titles[action] || action}`)
+            .setDescription(lines.join('\n'));
 
         const pingContent = extra.pingRole ? `<@&${extra.pingRole}>` : null;
         if (settings.logs?.raidLogs || settings.logs?.channel) {

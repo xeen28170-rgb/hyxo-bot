@@ -1,6 +1,8 @@
 'use strict';
 
+const { EmbedBuilder } = require('discord.js');
 const BackupService = require('../../services/backupService');
+const { getEmoji } = require('../../config/emojis');
 const Backup = require('../../models/Backup');
 const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
@@ -23,7 +25,18 @@ module.exports = {
 
         if (sub === 'create') {
             const backup = await BackupService.create(message.guild, message.author.id);
-            return message.channel.send({ embeds: [EmbedHelper.success(`Sauvegarde créée avec l'ID : \`${backup.backupId}\``)] });
+            const data = backup.data || {};
+            const salons = (data.channels?.length || 0) + (data.categories?.length || 0);
+            const roles = data.roles?.length || 0;
+            const embed = new EmbedBuilder()
+                .setColor(0x3FD39C)
+                .setAuthor({ name: `Sauvegarde · ${message.guild.name}` })
+                .setTitle(`${getEmoji('BACKUP')} Sauvegarde prête`)
+                .setDescription([
+                    `${salons} salons, ${roles} rôles${data.configuration ? ' et tous les réglages' : ''}.`,
+                    `Code pour restaurer : **${backup.backupId}**`,
+                ].join('\n'));
+            return message.channel.send({ embeds: [embed] });
         }
 
         if (sub === 'restore') {

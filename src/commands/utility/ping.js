@@ -2,6 +2,14 @@
 
 const { EmbedBuilder } = require('discord.js');
 const EmbedHelper = require('../../utils/embedBuilder');
+const Helpers = require('../../utils/helpers');
+const { getEmoji } = require('../../config/emojis');
+
+function verdict(ms) {
+    if (ms < 120) return { label: 'excellent', color: 0x3BD47E };
+    if (ms < 300) return { label: 'correct', color: 0xFFD43B };
+    return { label: 'lent', color: 0xFF2D4B };
+}
 
 module.exports = {
     name: 'ping',
@@ -11,17 +19,16 @@ module.exports = {
     cooldown: 5,
     async run(client, message) {
         const start = Date.now();
-        const msg = await message.channel.send({ embeds: [EmbedHelper.info('🏓 Pong !', 'Je mesure le temps de réponse…')] });
+        const msg = await message.channel.send({ embeds: [EmbedHelper.info('Latence', 'Mesure en cours…')] });
         const latency = Date.now() - start;
-        const wsLatency = client.ws.ping;
+        const ws = client.ws.ping;
+        const { label, color } = verdict(latency);
 
         const embed = new EmbedBuilder()
-            .setColor(latency < 100 ? EmbedHelper.Colors.SUCCESS : latency < 250 ? EmbedHelper.Colors.WARNING : EmbedHelper.Colors.ERROR)
-            .setTitle('🏓 Pong !')
-            .addFields(
-                { name: 'Réponse', value: `**${latency} ms**`, inline: true },
-                { name: 'Connexion Discord', value: wsLatency < 0 ? 'En cours de mesure' : `**${wsLatency} ms**`, inline: true },
-            );
+            .setColor(color)
+            .setAuthor({ name: 'Latence' })
+            .setTitle(`${getEmoji('PING')} ${latency} ms · ${label}`)
+            .setDescription(`Connexion ${ws < 0 ? 'en cours de mesure' : `${ws} ms`} · démarré ${Helpers.discordTimestamp(Date.now() - client.uptime, 'R')}`);
 
         await msg.edit({ embeds: [embed] });
     },

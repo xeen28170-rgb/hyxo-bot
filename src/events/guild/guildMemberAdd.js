@@ -1,5 +1,6 @@
 'use strict';
 
+const { EmbedBuilder } = require('discord.js');
 const EmbedHelper = require('../../utils/embedBuilder');
 const AntiraidService = require('../../services/antiraidService');
 const LogDispatcher = require('../../utils/logDispatcher');
@@ -54,16 +55,24 @@ module.exports = {
             if (settings?.welcome?.enabled && settings?.welcome?.channel) {
                 const welcomeChannel = guild.channels.cache.get(settings.welcome.channel);
                 if (welcomeChannel) {
-                    let msgContent = null;
-                    if (settings.welcome.message) {
-                        msgContent = settings.welcome.message
-                            .replace(/{user}/g, () => `<@${member.id}>`)
-                            .replace(/{server}/g, () => guild.name)
-                            .replace(/{memberCount}/g, () => String(guild.memberCount));
-                    }
+                    // Le message personnalisé du serveur (-welcome) devient le texte de l'embed.
+                    const text = (settings.welcome.message || 'Installe-toi sur **{server}**, on est content de te voir.')
+                        .replace(/{user}/g, () => `<@${member.id}>`)
+                        .replace(/{server}/g, () => guild.name)
+                        .replace(/{memberCount}/g, () => String(guild.memberCount));
 
+                    const embed = new EmbedBuilder()
+                        .setColor(0x3BD47E)
+                        .setAuthor({ name: `Membre #${guild.memberCount}` })
+                        .setTitle(`Bienvenue ${member.displayName}`)
+                        .setDescription(text.slice(0, 1000))
+                        .setThumbnail(member.user.displayAvatarURL({ size: 256 }));
+
+                    // La mention reste hors de l'embed pour que le membre soit notifié.
                     await welcomeChannel.send({
-                        content: msgContent || `<@${member.id}>`,
+                        content: `<@${member.id}>`,
+                        embeds: [embed],
+                        allowedMentions: { users: [member.id] },
                     }).catch(() => {});
                 }
             }

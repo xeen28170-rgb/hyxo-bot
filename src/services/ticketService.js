@@ -142,15 +142,14 @@ const TicketService = {
             });
 
             const embed = new EmbedBuilder()
-                .setColor(0x5865F2)
-                .setTitle(`${getEmoji('TICKET')} Ticket #${ticketId}`)
-                .setDescription(`Bonjour ${user}, bienvenue dans votre ticket!\n\nDécrivez votre problème et un membre du support vous répondra dès que possible.`)
-                .setTimestamp()
-                .setFooter({ text: `Ticket créé par ${user.tag}` });
+                .setColor(0x4F95F5)
+                .setAuthor({ name: `Ticket #${ticketId} · ouvert par ${user.username}` })
+                .setTitle(`${getEmoji('TICKET')} Ton ticket est ouvert`)
+                .setDescription(`Décris ton problème ici, ${user}. Un membre du staff va te répondre.`);
 
             const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('ticket_close').setLabel('Fermer').setEmoji(getEmoji('TICKET_CLOSE')).setStyle(ButtonStyle.Danger),
-                new ButtonBuilder().setCustomId('ticket_claim').setLabel('Prendre en charge').setEmoji(getEmoji('TICKET_CLAIM')).setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId('ticket_claim').setLabel('Prendre en charge').setEmoji(getEmoji('TICKET_CLAIM')).setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('ticket_close').setLabel('Fermer').setEmoji(getEmoji('TICKET_CLOSE')).setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId('ticket_transcript').setLabel('Transcription').setEmoji(getEmoji('TICKET_TRANSCRIPT')).setStyle(ButtonStyle.Secondary)
             );
 
