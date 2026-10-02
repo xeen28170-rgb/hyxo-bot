@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Génère le pack d'emojis Xeen (style « icône 3D » : relief, reflet, halo).
+ * Génère le pack d'emojis Hyxo (style « icône 3D » : relief, reflet, halo).
  *
  *   node scripts/generateEmojis.js            # écrit assets/emojis/<clé>.png
  *   node scripts/generateEmojis.js --out=dir  # écrit dans un autre dossier

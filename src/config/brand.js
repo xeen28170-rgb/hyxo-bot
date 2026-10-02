@@ -1,8 +1,8 @@
 'use strict';
 
 module.exports = Object.freeze({
-    name: 'XEEN',
-    footer: 'Xeen',
+    name: 'HYXO',
+    footer: 'Hyxo',
     colors: Object.freeze({
         PRIMARY: 0x737B87,
         SUCCESS: 0x55CFA4,

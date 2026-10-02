@@ -16,7 +16,7 @@ function supportUrl() {
 
 function linkRow(client) {
     const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('Inviter Xeen').setEmoji('➕').setURL(inviteUrl(client)),
+        new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('Inviter Hyxo').setEmoji('➕').setURL(inviteUrl(client)),
     );
     if (supportUrl()) row.addComponents(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('Serveur support').setEmoji('💬').setURL(supportUrl()));
     return row;

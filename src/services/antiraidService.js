@@ -935,8 +935,8 @@ const AntiraidService = {
 // du client — est appelé depuis ready.js qui dispose de la référence au client.
 // Un hot-reload du module ne doit pas empiler plusieurs minuteries : un garde global
 // n'en crée qu'une seule pour tout le processus.
-if (!globalThis.__xeenAntiraidCleanupStarted) {
-    globalThis.__xeenAntiraidCleanupStarted = true;
+if (!globalThis.__hyxoAntiraidCleanupStarted) {
+    globalThis.__hyxoAntiraidCleanupStarted = true;
     const cleanupTimer = setInterval(() => {
         AntiraidService.cleanupModuleCache();
     }, 5 * 60_000);

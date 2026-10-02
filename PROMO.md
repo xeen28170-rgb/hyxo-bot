@@ -1,8 +1,8 @@
-# 📣 Kit de promotion Xeen
+# 📣 Kit de promotion Hyxo
 
-Textes prêts à copier-coller. Remplace `CLIENT_ID_ICI` et `LIEN_SUPPORT_ICI` partout.
+Textes prêts à copier-coller. Remplace `1538271225640652810` et `LIEN_SUPPORT_ICI` partout.
 
-- **Lien d'invitation :** `https://discord.com/oauth2/authorize?client_id=CLIENT_ID_ICI&scope=bot+applications.commands&permissions=8`
+- **Lien d'invitation :** `https://discord.com/oauth2/authorize?client_id=1538271225640652810&scope=bot+applications.commands&permissions=8`
 - **Tags :** Moderation, Security, Anti-Raid, Tickets, Utility, Giveaway, French
 
 ---
@@ -20,9 +20,9 @@ Textes prêts à copier-coller. Remplace `CLIENT_ID_ICI` et `LIEN_SUPPORT_ICI` p
 ## 2. Description longue (top.gg / discordbotlist.com / discord.bots.gg)
 
 ```markdown
-# 🛡️ Xeen — protège et gère ton serveur
+# 🛡️ Hyxo — protège et gère ton serveur
 
-Xeen est un bot **gratuit** qui regroupe tout ce dont un serveur a besoin, sans panel web : tout se configure directement dans Discord avec des menus et des boutons.
+Hyxo est un bot **gratuit** qui regroupe tout ce dont un serveur a besoin, sans panel web : tout se configure directement dans Discord avec des menus et des boutons.
 
 ## 🛡️ Antiraid & sécurité
 - Bloque les suppressions/créations massives de salons, rôles et webhooks
@@ -39,7 +39,7 @@ Ban, tempban, kick, mute, timeout, warns, prison, lock/hide, historique des sanc
 ## 🎫 Tickets · 💾 Backups · 🎉 Giveaways · 🎤 Vocaux temporaires · 📊 Logs
 
 ## 🚀 Démarrage
-1. Invite Xeen
+1. Invite Hyxo
 2. Tape `-help`
 3. Configure la sécurité avec `-secur`
 
@@ -51,7 +51,7 @@ Ban, tempban, kick, mute, timeout, warns, prison, lock/hide, historique des sanc
 ## 3. Message pour les salons de pub (serveurs Discord)
 
 ```
-🛡️ **Xeen** — le bot tout-en-un pour ton serveur
+🛡️ **Hyxo** — le bot tout-en-un pour ton serveur
 
 ✅ Antiraid complet (salons, rôles, webhooks, bots, bans)
 ✅ Automod : liens, spam, insultes, mentions
@@ -60,7 +60,7 @@ Ban, tempban, kick, mute, timeout, warns, prison, lock/hide, historique des sanc
 ✅ Giveaways, vocaux temporaires, logs
 ✅ +140 commandes, 100 % gratuit
 
-➕ Inviter : https://discord.com/oauth2/authorize?client_id=CLIENT_ID_ICI&scope=bot+applications.commands&permissions=8
+➕ Inviter : https://discord.com/oauth2/authorize?client_id=1538271225640652810&scope=bot+applications.commands&permissions=8
 💬 Support : https://discord.gg/LIEN_SUPPORT_ICI
 ```
 
@@ -70,10 +70,10 @@ Ban, tempban, kick, mute, timeout, warns, prison, lock/hide, historique des sanc
 
 ## 4. Post Reddit (r/discordbots, r/Discord_Bots)
 
-**Titre :** I made Xeen, a free anti-raid & moderation bot (140+ commands)
+**Titre :** I made Hyxo, a free anti-raid & moderation bot (140+ commands)
 
 ```
-Hey! I've been building Xeen, a free Discord bot focused on keeping servers safe.
+Hey! I've been building Hyxo, a free Discord bot focused on keeping servers safe.
 
 - Anti-raid: blocks mass channel/role/webhook deletions, bot adds, mass bans
 - Automod: links, spam, bad words, mass mentions, strike system
@@ -81,7 +81,7 @@ Hey! I've been building Xeen, a free Discord bot focused on keeping servers safe
 - Everything is configured inside Discord with menus and buttons, no web dashboard
 - FR / EN
 
-Invite: https://discord.com/oauth2/authorize?client_id=CLIENT_ID_ICI&scope=bot+applications.commands&permissions=8
+Invite: https://discord.com/oauth2/authorize?client_id=1538271225640652810&scope=bot+applications.commands&permissions=8
 
 Feedback welcome, I'm actively working on it!
 ```
@@ -90,7 +90,7 @@ Feedback welcome, I'm actively working on it!
 
 ## 5. Idées de vidéos courtes (TikTok / YouTube Shorts)
 
-1. **« Un raid en direct »** : lance un faux raid sur un serveur de test (plein de salons supprimés), puis montre Xeen qui sanctionne et restaure en quelques secondes. 15 à 20 s.
+1. **« Un raid en direct »** : lance un faux raid sur un serveur de test (plein de salons supprimés), puis montre Hyxo qui sanctionne et restaure en quelques secondes. 15 à 20 s.
 2. **« Backup en 1 clic »** : supprime tout un serveur de test, puis restaure-le avec `-backup`.
 3. **« 3 commandes que ton serveur doit avoir »** : `-secur`, `-ticket`, `-giveaway`.
 

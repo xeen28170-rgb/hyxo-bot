@@ -19,7 +19,7 @@ module.exports = {
                 { name: '💬 Salons', value: `\`${client.channels.cache.size.toLocaleString()}\``, inline: true },
                 { name: '📡 Latence API', value: `\`${client.ws.ping}ms\``, inline: true }
             )
-            .setFooter({ text: `Gestions Bot v${client.version}` })
+            .setFooter({ text: `Hyxo v${client.version}` })
             .setTimestamp();
 
         await message.channel.send({ embeds: [embed] });

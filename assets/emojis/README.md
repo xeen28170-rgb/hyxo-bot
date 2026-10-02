@@ -1,4 +1,4 @@
-# Emojis du bot — pack Xeen 3D
+# Emojis du bot — pack Hyxo 3D
 
 Les images de ce dossier sont **générées** par `scripts/generateEmojis.js`
 (pictogrammes Tabler Icons, licence MIT, mis en relief 3D : dégradé,

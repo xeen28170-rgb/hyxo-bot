@@ -139,7 +139,7 @@
     "not_found": "❌ Reminder not found."
   },
   "help": {
-    "title": "📚 Help — Gestions Bot",
+    "title": "📚 Help — Hyxo",
     "description": "Use buttons or the menu to navigate categories.",
     "footer": "Prefix: {prefix} | {commands} commands available",
     "no_command": "❌ Command not found.",

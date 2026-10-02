@@ -7,7 +7,7 @@
  *   embed  → Container (barre de couleur) avec titre, texte, avatar en
  *            accessoire, séparateurs, lignes de champs, image, pied de page
  *   boutons/menus → intégrés en bas du dernier panneau
- * Les emojis Unicode connus sont remplacés par les emojis Xeen (pack 3D),
+ * Les emojis Unicode connus sont remplacés par les emojis Hyxo (pack 3D),
  * y compris dans les boutons et menus, même pour les messages sans embed.
  *
  * Le code des commandes ne change pas : il continue d'utiliser EmbedBuilder.

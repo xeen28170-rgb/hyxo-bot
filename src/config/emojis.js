@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Registre central des emojis personnalisés du bot (pack Xeen 3D).
+ * Registre central des emojis personnalisés du bot (pack Hyxo 3D).
  *
  * Ce sont des "Application Emojis" Discord : ils appartiennent au bot
  * lui-même (et pas à un serveur), donc ils s'affichent correctement
@@ -147,7 +147,7 @@ const FALLBACK = {
 };
 
 // Emojis Unicode écrits dans le code → clé du pack. Sert à remplacer
-// automatiquement les emojis Unicode par les emojis Xeen dans les messages.
+// automatiquement les emojis Unicode par les emojis Hyxo dans les messages.
 const UNICODE_ALIASES = {
     '✔️': 'SUCCESS', '✖️': 'ERROR', '⛔': 'BLOCK', '🔴': 'FLAME', '⚪': 'OFF',
     '🔄': 'GIVEAWAY_REROLL', '🎙️': 'VOICE', '🔊': 'UNMUTE', '📂': 'FOLDER',
@@ -184,14 +184,14 @@ function customId(key) {
     return /:(\d+)>$/.exec(EMOJIS[key] || '')?.[1] || null;
 }
 
-/** Vrai si une réaction correspond à la clé (emoji Xeen ou son équivalent Unicode). */
+/** Vrai si une réaction correspond à la clé (emoji Hyxo ou son équivalent Unicode). */
 function matchesReaction(emoji, key) {
     if (!emoji) return false;
     const id = customId(key);
     return Boolean((id && emoji.id === id) || emoji.name === FALLBACK[key]);
 }
 
-/** Réaction d'un message pour une clé : emoji Xeen, ou Unicode (anciens messages). */
+/** Réaction d'un message pour une clé : emoji Hyxo, ou Unicode (anciens messages). */
 function findReaction(message, key) {
     const id = customId(key);
     return (id && message.reactions.cache.get(id)) || message.reactions.cache.get(FALLBACK[key]) || null;

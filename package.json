@@ -1,7 +1,7 @@
 {
-  "name": "gestions-bot",
+  "name": "hyxo-bot",
   "version": "2.0.0",
-  "description": "Bot Discord professionnel Gestions - Open Source Discord Bot",
+  "description": "Hyxo - bot Discord de sécurité et de gestion",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
@@ -14,11 +14,11 @@
   "keywords": [
     "discord",
     "bot",
-    "gestions",
+    "hyxo",
     "moderation",
-    "open source"
+    "security"
   ],
-  "author": "Gestions Team",
+  "author": "Hyxo",
   "license": "MIT",
   "engines": {
     "node": ">=18.17.0"

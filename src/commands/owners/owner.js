@@ -106,7 +106,7 @@ module.exports = {
         const botOwnerIds = Array.from(client.botOwners);
         const botOwnerTag = botOwnerIds.length > 0 
             ? botOwnerIds.map(id => `<@${id}>`).join(', ')
-            : 'Xeen';
+            : 'Hyxo';
 
         const embed = EmbedHelper.info('👑 Owners du Serveur', [
             `**Propriétaire du Bot:** ${botOwnerTag}`,

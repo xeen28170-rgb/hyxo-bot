@@ -1,11 +1,11 @@
 <div align="center">
 
-# 🛡️ Xeen
+# 🛡️ Hyxo
 
 **Le bot Discord tout-en-un pour protéger et gérer votre serveur.**
 Modération · Antiraid · Tickets · Backups · Giveaways · Vocaux temporaires
 
-[![Inviter Xeen](https://img.shields.io/badge/➕_Inviter_Xeen-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.com/oauth2/authorize?client_id=CLIENT_ID_ICI&scope=bot+applications.commands&permissions=8)
+[![Inviter Hyxo](https://img.shields.io/badge/➕_Inviter_Hyxo-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.com/oauth2/authorize?client_id=1538271225640652810&scope=bot+applications.commands&permissions=8)
 [![Serveur support](https://img.shields.io/badge/💬_Support-2B2D31?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/LIEN_SUPPORT_ICI)
 
 [![discord.js](https://img.shields.io/badge/discord.js-v14-5865F2)](https://discord.js.org)
@@ -15,7 +15,7 @@ Modération · Antiraid · Tickets · Backups · Giveaways · Vocaux temporaires
 
 ---
 
-## ✨ Pourquoi Xeen ?
+## ✨ Pourquoi Hyxo ?
 
 - **Plus de 140 commandes** en français et en anglais, prêtes à l'emploi.
 - **Une vraie protection antiraid** : seuls les owners et la whitelist échappent aux sanctions.
@@ -38,7 +38,7 @@ Modération · Antiraid · Tickets · Backups · Giveaways · Vocaux temporaires
 
 ## 🚀 Démarrage rapide
 
-1. **[Invitez Xeen](https://discord.com/oauth2/authorize?client_id=CLIENT_ID_ICI&scope=bot+applications.commands&permissions=8)** sur votre serveur.
+1. **[Invitez Hyxo](https://discord.com/oauth2/authorize?client_id=1538271225640652810&scope=bot+applications.commands&permissions=8)** sur votre serveur.
 2. Tapez `-help` pour afficher le menu des commandes.
 3. Configurez la sécurité avec `-secur`.
 
@@ -77,7 +77,7 @@ npm run shard      # sharding pour les gros bots
 
 Sur un VPS, utilisez [pm2](https://pm2.keymetrics.io/) pour garder le bot en ligne :
 ```bash
-pm2 start index.js --name xeen && pm2 save && pm2 startup
+pm2 start index.js --name hyxo && pm2 save && pm2 startup
 ```
 
 ## 📂 Structure du projet
@@ -96,4 +96,4 @@ shard.js      Gestionnaire de sharding
 
 ## 🔒 Code source
 
-Le code de Xeen est **privé**. Ne partagez jamais ce dépôt ni le fichier `.env`.
+Le code de Hyxo est **privé**. Ne partagez jamais ce dépôt ni le fichier `.env`.

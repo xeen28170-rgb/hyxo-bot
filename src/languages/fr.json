@@ -163,7 +163,7 @@
     "not_found": "❌ Rappel introuvable."
   },
   "help": {
-    "title": "📚 Aide — Gestions Bot",
+    "title": "📚 Aide — Hyxo",
     "description": "Utilisez les boutons ou le menu pour naviguer entre les catégories.",
     "footer": "Préfixe: {prefix} | {commands} commandes disponibles",
     "no_command": "❌ Commande introuvable.",

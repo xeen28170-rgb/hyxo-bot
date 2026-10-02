@@ -152,15 +152,15 @@ async function handleButton(client, interaction) {
     Logger.debug(`Bouton non géré: ${customId}`);
 }
 
-const embedSessions = globalThis.__xeenEmbedSessions && globalThis.__xeenEmbedSessions.__data
-    ? globalThis.__xeenEmbedSessions.__data
-    : (globalThis.__xeenEmbedSessions = { __data: new Map() }).__data;
+const embedSessions = globalThis.__hyxoEmbedSessions && globalThis.__hyxoEmbedSessions.__data
+    ? globalThis.__hyxoEmbedSessions.__data
+    : (globalThis.__hyxoEmbedSessions = { __data: new Map() }).__data;
 
 // Purge des sessions d'embed builder abandonnées (l'utilisateur ne clique jamais
 // sur Envoyer/Annuler) pour éviter une fuite mémoire lente sur les gros serveurs.
 const EMBED_SESSION_TTL = 15 * 60 * 1000;
-if (!globalThis.__xeenEmbedCleanupStarted) {
-    globalThis.__xeenEmbedCleanupStarted = true;
+if (!globalThis.__hyxoEmbedCleanupStarted) {
+    globalThis.__hyxoEmbedCleanupStarted = true;
     setInterval(() => {
         const now = Date.now();
         for (const [id, session] of embedSessions) {

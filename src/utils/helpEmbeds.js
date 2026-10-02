@@ -244,7 +244,7 @@ function buildCategoryEmbedArray(commands, categoryKey, prefix, client = null) {
         ].join('\n'));
         const embed = new EmbedBuilder()
             .setColor(info.color || HELP_COLOR)
-            .setAuthor({ name: (client?.user?.username || 'Xeen') + ' · Centre d’aide' })
+            .setAuthor({ name: (client?.user?.username || 'Hyxo') + ' · Centre d’aide' })
             .setTitle(info.emoji + ' ' + info.label)
             .setDescription([`*${info.description}*`, '', ...entries.flatMap(entry => [entry, ''])].join('\n').trim())
             .setFooter({ text: 'Page ' + (pages.length + 1) + '/' + total + ' · ' + sorted.length + ' commande' + (sorted.length > 1 ? 's' : '') + ' · ' + prefix + 'help <commande> pour le détail' });

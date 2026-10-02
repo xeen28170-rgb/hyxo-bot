@@ -42,8 +42,8 @@ class CacheManager {
     }
 
     async init() {
-        if (!globalThis.__xeenCacheInitStarted) {
-            globalThis.__xeenCacheInitStarted = true;
+        if (!globalThis.__hyxoCacheInitStarted) {
+            globalThis.__hyxoCacheInitStarted = true;
             const timer = setInterval(() => this.cleanup(), 60 * 1000); // Toutes les minutes
             if (timer.unref) timer.unref();
         }

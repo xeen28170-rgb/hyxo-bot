@@ -29,7 +29,7 @@ module.exports = {
         const channel = welcomeChannel(guild);
         if (!channel) return;
         const prefix = settings?.prefix || client.prefix;
-        const embed = EmbedHelper.info('👋 Merci d\'avoir ajouté Xeen !', [
+        const embed = EmbedHelper.info('👋 Merci d\'avoir ajouté Hyxo !', [
             `Mon préfixe est \`${prefix}\`. Tapez \`${prefix}help\` pour voir toutes les commandes.`,
             '',
             '🛡️ Modération & antiraid · 🎫 Tickets · 💾 Backups · 🎉 Giveaways · 🎤 Vocaux temporaires',

@@ -72,7 +72,7 @@ const client = new Client({
     },
 });
 
-// Rendu « panneau moderne » (Components V2) + emojis Xeen pour tous les messages.
+// Rendu « panneau moderne » (Components V2) + emojis Hyxo pour tous les messages.
 require('./src/utils/componentsV2').install(client);
 
 client.commands = new Collection();
