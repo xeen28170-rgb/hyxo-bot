@@ -197,6 +197,7 @@ function buildHelpCategoryMap(groups) {
 }
 
 function formatUsage(prefix, command) {
+    prefix = command.prefix || prefix; // commandes « & » (bl, wet)
     const usage = (command.usage || '').trim();
     if (!usage) return prefix + command.name;
     const bare = usage.replace(/^[=+\-!/\\.#@]+\s*/, '');
@@ -272,7 +273,7 @@ function buildAllCategoryEmbedsFlat(client, prefix) {
         buildCategoryEmbedArray(getCommandsForHelpCategory(client, key), key, prefix, client));
 }
 
-function buildHelpMenuEmbed(client, prefix = '-') {
+function buildHelpMenuEmbed(client, prefix = client?.prefix || '+') {
     const categories = Object.entries(HELP_CATEGORIES).flatMap(([key, info]) => {
         const count = getCommandsForHelpCategory(client, key).size;
         return count ? [`${info.emoji} **${info.label}** · \`${count}\`\n-# ${info.description}`] : [];
@@ -312,7 +313,7 @@ function permissionList(permissions) {
     return compactText(permissions.map(p => PERMISSION_LABELS[p] || String(p)).join(' · '), 1024);
 }
 
-function buildHelpCommandEmbed(client, command, prefix = '-') {
+function buildHelpCommandEmbed(client, command, prefix = client?.prefix || '+') {
     const info = HELP_CATEGORIES[classifyCommand(command)];
     const { EXAMPLES } = require('./commandPresentation');
     const access = command.ownerOnly ? 'Owners du bot'

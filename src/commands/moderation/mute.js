@@ -71,11 +71,16 @@ module.exports = {
             ModerationService.sendModLog(client, message.guild, sanction, member.user, message.author, settings),
         ]).catch(() => {});
 
-        const msg = duration
-            ? message.t('moderation.mute.temp_success', { user: member.user.tag, duration: Helpers.formatDuration(duration) })
-            : message.t('moderation.mute.success', { user: member.user.tag });
+        // Même présentation que le ban : titre, photo, durée, raison et numéro de cas.
+        const embed = EmbedHelper.info(
+            duration ? 'Exclusion temporaire' : 'Mute',
+            `**${member.user.username}** a été ${duration ? 'exclu temporairement' : 'rendu muet'}.${duration ? `\n**Durée** — ${Helpers.formatDuration(duration)}` : ''}\n**Raison** — ${reason}`,
+            { color: EmbedHelper.Colors.WARNING },
+        );
+        embed.setThumbnail(member.user.displayAvatarURL({ dynamic: true }));
+        embed.setFooter({ text: `Cas #${sanction.caseId}  ·  ID : ${member.id}` });
 
-        await SanctionCard.send(message.channel, EmbedHelper.success(`${msg}\n**Raison:** ${reason}`), {
+        await SanctionCard.send(message.channel, embed, {
             type: duration ? 'tempmute' : 'mute', user: member.user, moderator: message.author, reason,
             duration: duration ? Helpers.formatDuration(duration) : null, caseId: sanction.caseId,
         });

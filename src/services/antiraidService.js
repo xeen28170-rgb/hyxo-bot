@@ -478,7 +478,7 @@ const AntiraidService = {
                 } catch (e) {
                     Logger.error('[ANTIRAID] Erreur kick compte récent:', e);
                 }
-                return;
+                return true; // expulsé : pas de message de bienvenue
             }
         }
 

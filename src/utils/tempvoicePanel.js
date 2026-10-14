@@ -349,6 +349,7 @@ function safe(handler, label) {
         try {
             return await handler(client, interaction);
         } catch (error) {
+            if (error?.code === 10062 || error?.code === 40060) return; // clic expiré ou déjà acquitté
             Logger.error(`[TempVoicePanel] Erreur ${label}:`, error.message || String(error));
             await reply(interaction, '❌ Action impossible (permission manquante pour le bot ou limite Discord). Réessaie dans un instant.');
         }

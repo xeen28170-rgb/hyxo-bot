@@ -9,12 +9,17 @@ function deleteLater(message, config) {
     if (!config || !message?.delete) return;
     const delay = config.duration ? Helpers.parseDuration(config.duration) : 5000;
     if (!delay) return;
-    safeSetTimeout(() => message.delete().catch(error => {
+    safeSetTimeout(() => (cleanedUp.add(message.id), message).delete().catch(error => {
         if (error.code !== 10008) Logger.error('[Autodelete]', error.message);
     }), delay).unref?.();
 }
 
+// Messages de commande supprimés par le bot après exécution (ignorés par messageDelete).
+const cleanedUp = new Set();
+
 module.exports = {
+    wasCleanedUp: id => cleanedUp.has(id),
+
     async onMessage(message, settings) {
         if (settings.config?.autopublishChannels?.includes(message.channelId)
             && message.channel.type === ChannelType.GuildAnnouncement && !message.flags?.has(MessageFlags.Crossposted)) {
@@ -53,5 +58,56 @@ module.exports = {
             return reply;
         } });
         return wrapped;
+    },
+
+    /**
+     * Retient les réponses envoyées pendant une commande, pour le nettoyage d'après-commande.
+     * Une réponse est « courte » si elle ne contient que des embeds de succès / erreur /
+     * avertissement, sans boutons ni fichiers : ce sont les seules qui seront supprimées.
+     */
+    trackReplies(message, replies) {
+        const isShort = options => {
+            if (!options || typeof options !== 'object') return false;
+            const embeds = options.embeds || [];
+            return embeds.length > 0 && embeds.every(e => e?.statusKind)
+                && !options.components?.length && !options.files?.length && !options.content;
+        };
+        const remember = send => async (...args) => {
+            const reply = await send(...args);
+            if (reply?.delete) replies.push({ reply, short: isShort(args[0]) });
+            return reply;
+        };
+        const channel = new Proxy(message.channel, {
+            get(target, key) {
+                if (key === 'send') return remember(target.send.bind(target));
+                const value = Reflect.get(target, key, target);
+                return typeof value === 'function' ? value.bind(target) : value;
+            },
+        });
+        const wrapped = Object.create(message);
+        Object.defineProperty(wrapped, 'channel', { value: channel });
+        Object.defineProperty(wrapped, 'reply', { value: remember(message.reply.bind(message)) });
+        return wrapped;
+    },
+
+    /**
+     * Après une commande : le message de la personne est supprimé tout de suite, et les
+     * réponses courtes après 10 s. Les panneaux, infos, listes et fiches restent.
+     * Réglable par serveur : +autodelete tout commande off / +autodelete tout reply off|<durée>.
+     */
+    cleanupAfterCommand(message, replies, settings) {
+        const all = settings?.autodelete?.all || {};
+        if (all.commande !== null && message.delete) {
+            // Suppression du bot : pas de snipe, pas de log « message supprimé », pas de ghost ping.
+            cleanedUp.add(message.id);
+            setTimeout(() => cleanedUp.delete(message.id), 60_000).unref?.();
+            message.delete().catch(() => cleanedUp.delete(message.id));
+        }
+        if (all.reply === null) return;
+        const delay = Helpers.parseDuration(all.reply?.duration || '10s') || 10_000;
+        for (const { reply, short } of replies) {
+            if (!short) continue;
+            safeSetTimeout(() => reply.delete().catch(() => {}), delay).unref?.();
+        }
     },
 };

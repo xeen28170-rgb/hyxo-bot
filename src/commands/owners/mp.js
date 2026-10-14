@@ -17,7 +17,7 @@ module.exports = {
         if (!target || !text) return message.channel.send({ embeds: [EmbedHelper.error(`Usage: \`${prefix}mp <membre> <message>\``)] });
 
         try {
-            await target.send(text);
+            await target.send({ content: text, raw: true });
             message.channel.send({ embeds: [EmbedHelper.success(`Message envoyé à **${target.tag}**.`)] });
         } catch {
             message.channel.send({ embeds: [EmbedHelper.error('Impossible d\'envoyer un message à cet utilisateur (DM fermés).')] });

@@ -13,6 +13,14 @@ if (!fsSync.existsSync(DATA_DIR)) fsSync.mkdirSync(DATA_DIR, { recursive: true }
 
 let store = {};
 let isLoaded = false;
+const LEGACY_PREFIX = '-';
+const DEFAULT_PREFIX = defaultPrefix();
+
+function defaultPrefix() {
+    const fromEnv = (process.env.PREFIX || '').trim();
+    // « PREFIX=- » est l'ancien réglage par défaut des .env : on l'ignore.
+    return fromEnv && fromEnv !== LEGACY_PREFIX ? fromEnv : require('../config/brand').prefix;
+}
 const normalizedGuilds = new Set();
 
 async function ensureLoaded() {
@@ -21,10 +29,17 @@ async function ensureLoaded() {
         if (fsSync.existsSync(GUILDS_FILE)) {
             const raw = await fs.readFile(GUILDS_FILE, 'utf8');
             store = JSON.parse(raw);
+            let migrated = false;
             for (const guild of Object.values(store)) {
                 if (guild.createdAt) guild.createdAt = new Date(guild.createdAt);
                 if (guild.updatedAt) guild.updatedAt = new Date(guild.updatedAt);
+                // Ancien préfixe par défaut « - » : tous les serveurs passent au nouveau.
+                if (guild.prefix === LEGACY_PREFIX && DEFAULT_PREFIX !== LEGACY_PREFIX) {
+                    guild.prefix = DEFAULT_PREFIX;
+                    migrated = true;
+                }
             }
+            if (migrated) scheduleSave();
         }
     } catch (e) {
         const Logger = require('../utils/logger');
@@ -55,7 +70,7 @@ function scheduleSave() {
 function makeDefault(guildId) {
     return {
         guildId,
-        prefix: '-',
+        prefix: DEFAULT_PREFIX,
         language: 'fr',
         logs: {
             enabled: false, channel: null, modLogs: null, messageLogs: null,
@@ -118,6 +133,10 @@ function makeDefault(guildId) {
         giveaway: { channel: null, winMessage: '🎉 Bravo {winners} ! Vous gagnez **{prize}**' },
         welcome: { enabled: false, channel: null, message: 'Bienvenue {user} sur {server}!', autorole: null, roles: [], dm: false, dmMessage: '' },
         boost: { enabled: false, channel: null, message: 'Merci {user} pour le boost!', role: null },
+        // Messages publics de boost / d'arrêt de boost (+boostmsg). Les logs restent dans « boost ».
+        boostMessage: { enabled: false, channel: null, message: null, unboostMessage: null, unboostEnabled: true, role: null },
+        // Quiz automatique (+quizz) : thèmes vides = tous les thèmes.
+        quiz: { enabled: false, channel: null, themes: [], interval: 3, duration: 60 },
         statsChannels: null,
         owners: [],
         ownerRoles: [],
@@ -274,6 +293,21 @@ const Guild = {
         store[guildId] = doc;
         scheduleSave();
         return { modifiedCount: 1 };
+    },
+
+    // Utilisé par les commandes owner qui changent un réglage sur tous les serveurs.
+    updateMany: async (query = {}, update) => {
+        await ensureLoaded();
+        let modifiedCount = 0;
+        for (const doc of Object.values(store)) {
+            if (!matchesQuery(doc, query)) continue;
+            // Copie par serveur : sinon `{ permissions: {} }` partagerait le même objet entre tous.
+            applyOperators(doc, structuredClone(update));
+            doc.updatedAt = new Date();
+            modifiedCount++;
+        }
+        if (modifiedCount) scheduleSave();
+        return { modifiedCount };
     },
 
     findOneAndDelete: async ({ guildId }) => {

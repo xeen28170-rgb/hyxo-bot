@@ -103,6 +103,51 @@ const Helpers = {
     },
 
     /**
+     * Membre + rôle dans n'importe quel ordre (« @membre @rôle », « @rôle @membre »,
+     * IDs, nom du rôle). En réponse au message de quelqu'un, le membre est l'auteur
+     * de ce message et les arguments ne servent qu'à trouver le rôle.
+     * @returns {Promise<{ member: import('discord.js').GuildMember|null, role: import('discord.js').Role|null }>}
+     */
+    async resolveMemberAndRole(message, args) {
+        const guild = message.guild;
+        let member = null;
+        let role = null;
+        if (message.reference?.messageId) {
+            const replied = await message.fetchReference().catch(() => null);
+            if (replied?.author) member = await guild.members.fetch(replied.author.id).catch(() => null);
+        }
+        const rest = [];
+        for (const token of args) {
+            const roleMention = /^<@&(\d{17,20})>$/.exec(token);
+            const userMention = /^<@!?(\d{17,20})>$/.exec(token);
+            if (roleMention && !role) { role = guild.roles.cache.get(roleMention[1]) || null; continue; }
+            if (userMention && !member) { member = await guild.members.fetch(userMention[1]).catch(() => null); continue; }
+            if (/^\d{17,20}$/.test(token)) {
+                // ID seul : un rôle du serveur, sinon un membre.
+                if (!role && guild.roles.cache.has(token)) { role = guild.roles.cache.get(token); continue; }
+                if (!member) { member = await guild.members.fetch(token).catch(() => null); if (member) continue; }
+            }
+            rest.push(token);
+        }
+        // Le reste du texte : nom du rôle (ou du membre). Avec les deux manquants, on essaie
+        // chaque découpage « membre puis rôle » et « rôle puis membre ».
+        const findRole = text => Helpers.resolveRole(guild, text)
+            || guild.roles.cache.find(r => r.name.toLowerCase().includes(text.toLowerCase()) && text.length >= 3) || null;
+        if (rest.length && !role && member) role = findRole(rest.join(' '));
+        else if (rest.length && role && !member) member = await Helpers.resolveMember(guild, rest.join(' '));
+        else if (rest.length && !role && !member) {
+            for (let i = 1; i < rest.length && !(role && member); i++) {
+                const left = rest.slice(0, i).join(' '), right = rest.slice(i).join(' ');
+                const m1 = await Helpers.resolveMember(guild, left), r1 = m1 && findRole(right);
+                if (m1 && r1) { member = m1; role = r1; break; }
+                const r2 = findRole(left), m2 = r2 && await Helpers.resolveMember(guild, right);
+                if (r2 && m2) { member = m2; role = r2; break; }
+            }
+        }
+        return { member, role };
+    },
+
+    /**
      * Résoudre un salon
      */
     resolveChannel(guild, input) {

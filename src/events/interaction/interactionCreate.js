@@ -36,6 +36,12 @@ module.exports = {
                 await handleModal(client, interaction);
             }
         } catch (error) {
+            // 10062 : clic reçu trop tard (plus de 3 s, bot ralenti ou réseau lent).
+            // 40060 : déjà acquitté (requête renvoyée après un délai réseau). Aucune réponse possible.
+            if (error?.code === 10062 || error?.code === 40060) {
+                Logger.debug(`[Interaction] ${interaction.customId || interaction.type} ignorée : ${error.message}`);
+                return;
+            }
             Logger.error('Erreur interaction:', { message: error.message, stack: error.stack });
             const reply = { embeds: [EmbedHelper.error('❌ Une erreur est survenue.')], components: [] };
             try {
@@ -227,7 +233,7 @@ async function handleEmbedBuilder(client, interaction) {
         if (session.description) final.setDescription(session.description);
         if (session.imageUrl) final.setImage(session.imageUrl);
 
-        await message.channel.send({ embeds: [final] });
+        await message.channel.send({ embeds: [final], raw: true });
         embedSessions.delete(msgId);
         await interaction.update({ embeds: [EmbedHelper.success('✅ Embed envoyé !')], components: [] });
         return;

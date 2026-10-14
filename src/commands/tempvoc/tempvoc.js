@@ -5,6 +5,7 @@ const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
 const Guild = require('../../models/Guild');
 const Logger = require('../../utils/logger');
+const Permissions = require('../../utils/permissions');
 const { settleWithin } = require('../../utils/concurrency');
 const { getGuildSettings, invalidateGuildSettings } = require('../../utils/guildSettings');
 const {
@@ -28,7 +29,7 @@ module.exports = {
         if (!sub) return sendTempVocPanel(client, message);
 
         if (['setup', 'enable', 'disable', 'channel', 'category'].includes(sub)) {
-            if (!message.member.permissions.has('ManageChannels')) {
+            if (!canConfigure(client, message)) {
                 return message.channel.send({ embeds: [EmbedHelper.error(message.t('general.no_permission'))] });
             }
             if (sub === 'setup') {
@@ -140,6 +141,14 @@ module.exports = {
     },
 };
 
+// Configurer TempVoc : permission « Gérer les salons », ou propriétaire du serveur / du bot / Owner.
+function canConfigure(client, message) {
+    if (message.member.permissions.has('ManageChannels')) return true;
+    if (message.guild.ownerId === message.author.id) return true;
+    if (Permissions.isBotOwner(client, message.author.id)) return true;
+    return Boolean(message.guildSettings?.owners?.includes(message.author.id));
+}
+
 function formatChannel(channelId) {
     return channelId ? `<#${channelId}>` : 'Non configuré';
 }
@@ -157,6 +166,9 @@ function buildTempVocEmbed(guild, settings, tempVoc, channel) {
         '',
         '**Votre salon temporaire**',
         'Aucun salon temporaire trouvé pour vous.',
+        ...(config.enabled && config.createChannel
+            ? [`Rejoins <#${config.createChannel}> pour créer le tien, puis clique sur Rafraîchir.`]
+            : []),
     ];
 
     return new EmbedBuilder()
@@ -273,7 +285,7 @@ async function getTempVocState(message) {
 
 async function sendTempVocPanel(client, message) {
     const guildId = message.guild.id;
-    const canManageChannels = message.member.permissions.has('ManageChannels');
+    const canManageChannels = canConfigure(client, message);
     let settings = message.guildSettings || await getGuildSettings(client, guildId);
     let { tempVoc, channel } = await getTempVocState(message);
 

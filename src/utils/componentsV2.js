@@ -7,8 +7,9 @@
  *   embed  → Container (barre de couleur) avec titre, texte, avatar en
  *            accessoire, séparateurs, lignes de champs, image, pied de page
  *   boutons/menus → intégrés en bas du dernier panneau
- * Les emojis Unicode connus sont remplacés par les emojis Hyxo (pack 3D),
- * y compris dans les boutons et menus, même pour les messages sans embed.
+ * Tous les emojis sont retirés (texte, boutons, menus), et une réponse en texte
+ * seul devient elle aussi un panneau (cf. plainMessages.textToEmbed).
+ * Un envoi avec l'option `raw: true` (texte écrit par un utilisateur) est laissé tel quel.
  *
  * Le code des commandes ne change pas : il continue d'utiliser EmbedBuilder.
  * Si Discord refuse la version V2 (limites de composants/texte), le message
@@ -16,7 +17,7 @@
  */
 
 const { MessagePayload, MessageFlags, ComponentType } = require('discord.js');
-const { EMOJIS, UNICODE_ALIASES } = require('../config/emojis');
+const { stripEmojis, cleanComponents, cleanEmbed, textToEmbed, rewritePrefix } = require('./plainMessages');
 const Logger = require('./logger');
 
 const V2 = MessageFlags.IsComponentsV2;
@@ -25,65 +26,10 @@ const legacyBodies = new WeakMap(); // corps V2 → corps d'origine (repli)
 
 // ─── Emojis ──────────────────────────────────────────────────────
 
-let emojiTable = null;
-function getEmojiTable() {
-    if (emojiTable) return emojiTable;
-    const map = new Map();
-    for (const [unicode, key] of Object.entries(UNICODE_ALIASES)) {
-        const custom = EMOJIS[key];
-        if (!custom) continue;
-        map.set(unicode, custom);
-        const bare = unicode.replace(/\uFE0F/g, '');
-        if (!map.has(bare)) map.set(bare, custom);
-    }
-    const keys = [...map.keys()].sort((a, b) => b.length - a.length).map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-    emojiTable = { map, regex: keys.length ? new RegExp(`(?:${keys.join('|')})\uFE0F?`, 'gu') : null };
-    return emojiTable;
-}
-
-function swapText(text) {
-    if (typeof text !== 'string' || !text) return text;
-    const { map, regex } = getEmojiTable();
-    if (!regex) return text;
-    return text.replace(regex, m => map.get(m) || map.get(m.replace(/\uFE0F/g, '')) || m);
-}
-
-function parseCustom(str) {
-    const m = /^<(a?):(\w+):(\d+)>$/.exec(str || '');
-    return m ? { id: m[3], name: m[2], animated: Boolean(m[1]) } : null;
-}
-
-function swapEmojiObject(emoji) {
-    if (!emoji || emoji.id || !emoji.name) return emoji;
-    const custom = getEmojiTable().map.get(emoji.name) || getEmojiTable().map.get(emoji.name.replace(/\uFE0F/g, ''));
-    return parseCustom(custom) || emoji;
-}
-
-/** Remplace les emojis dans une arborescence de composants (JSON API). */
-function swapComponents(components) {
-    if (!Array.isArray(components)) return components;
-    return components.map(function walk(node) {
-        if (!node || typeof node !== 'object') return node;
-        const out = { ...node };
-        if (out.emoji) out.emoji = swapEmojiObject(out.emoji);
-        if (typeof out.content === 'string') out.content = swapText(out.content);
-        if (Array.isArray(out.options)) out.options = out.options.map(o => (o?.emoji ? { ...o, emoji: swapEmojiObject(o.emoji) } : o));
-        if (Array.isArray(out.components)) out.components = out.components.map(walk);
-        if (out.accessory) out.accessory = walk(out.accessory);
-        return out;
-    });
-}
-
-function swapEmbed(e) {
-    return {
-        ...e,
-        title: swapText(e.title),
-        description: swapText(e.description),
-        author: e.author ? { ...e.author, name: swapText(e.author.name) } : e.author,
-        footer: e.footer ? { ...e.footer, text: swapText(e.footer.text) } : e.footer,
-        fields: e.fields?.map(f => ({ ...f, name: swapText(f.name), value: swapText(f.value) })),
-    };
-}
+// Les panneaux restent sobres : tous les emojis sont retirés (texte, boutons, menus).
+const swapText = stripEmojis;
+const swapComponents = cleanComponents;
+const swapEmbed = cleanEmbed;
 
 // ─── Conversion embed → panneau ─────────────────────────────────
 
@@ -267,7 +213,9 @@ function mergeIntoExistingPanel(payload, body) {
 
 function transform(payload) {
     const body = payload.body;
-    if (!body) return;
+    if (!body || payload.options?.raw) return;
+    rewritePrefix(payload, body);
+    textToEmbed(body);
     if (!((body.flags ?? 0) & V2) && !body.embeds?.length && mergeIntoExistingPanel(payload, body)) return;
     // Arborescence déjà en V2 (ex: boutons désactivés d'un panneau) : le flag est obligatoire.
     if (!((body.flags ?? 0) & V2) && body.components?.some(isV2Type)) body.flags = (body.flags ?? 0) | V2;
@@ -308,6 +256,15 @@ function patchRest(client) {
     const rest = client.rest;
     const original = rest.request.bind(rest);
     rest.request = async function request(options) {
+        // Fenêtre de saisie (réponse d'interaction de type 9) : elle ne passe pas par
+        // MessagePayload, on retire donc ici les emojis du titre et des libellés.
+        // Le texte pré-rempli (`value`) appartient à l'utilisateur et n'est pas touché.
+        if (options?.body?.type === 9 && options.body.data) {
+            const data = { ...options.body.data };
+            if (typeof data.title === 'string') data.title = swapText(data.title).trim() || 'Formulaire';
+            if (Array.isArray(data.components)) data.components = swapComponents(data.components);
+            options = { ...options, body: { ...options.body, data } };
+        }
         try {
             return await original(options);
         } catch (err) {

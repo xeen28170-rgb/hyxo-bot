@@ -70,7 +70,7 @@ module.exports = {
 
             case 'reset':
                 await Guild.updateOne({ guildId: message.guild.id }, {
-                    prefix: '-', language: 'fr',
+                    prefix: client.prefix, language: 'fr',
                     modRoles: [], adminRoles: [],
                 });
                 client.cache.invalidateGuild(message.guild.id);
@@ -90,7 +90,7 @@ async function sendConfigView(client, message) {
         .setThumbnail(message.guild.iconURL({ dynamic: true }))
         .addFields(
             { name: '⚙️ Général', value: [
-                `**Préfixe:** \`${settings?.prefix || '-'}\``,
+                `**Préfixe:** \`${settings?.prefix || client.prefix}\``,
                 `**Langue:** ${settings?.language?.toUpperCase() || 'FR'}`,
                 `**Rôle mute:** ${settings?.moderation?.muteRole ? `<@&${settings.moderation.muteRole}>` : 'Non configuré'}`,
             ].join('\n'), inline: false },

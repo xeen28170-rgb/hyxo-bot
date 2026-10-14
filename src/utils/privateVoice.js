@@ -3,7 +3,7 @@
 const PermissionsHelper = require('./permissions');
 const { isWhitelisted } = require('./whitelist');
 const PrivateVoice = require('../models/PrivateVoice');
-const { ChannelType, PermissionFlagsBits } = require('discord.js');
+const { ChannelType, OverwriteType, PermissionFlagsBits } = require('discord.js');
 const { mapLimit } = require('./concurrency');
 const Logger = require('./logger');
 
@@ -58,8 +58,7 @@ function isRankRole(role, settings) {
 
 function canJoinPrivateVoiceByLevel(ownerLevel, joinerLevel) {
     if (joinerLevel === LEVEL.BOT_OWNER) return true;
-    if (ownerLevel === LEVEL.BOT_OWNER) return joinerLevel >= LEVEL.MEMBER;
-    if (ownerLevel === LEVEL.OWNER || ownerLevel === LEVEL.WL) return joinerLevel >= LEVEL.OWNER;
+    if (ownerLevel >= LEVEL.WL) return joinerLevel >= LEVEL.OWNER;
     return false;
 }
 // Peut gérer un PV : le propriétaire du salon, ou un Owner / bot owner.
@@ -83,8 +82,7 @@ function getBotOwnerIds(client) {
 
 // Applique les permissions pour rendre le salon vocal privé.
 // Règles :
-//   Propriétaire bot PV → tout le monde peut entrer
-//   Owner PV → Owners + Propriétaires peuvent entrer (WL et Gens non)
+//   Propriétaire bot PV / Owner PV → Owners + Propriétaires peuvent entrer (WL et Gens non)
 //   WL PV → Owners + Propriétaires peuvent entrer (Gens non)
 // Renvoie le record PV créé (avec les ids d'overrides à nettoyer).
 async function applyPrivateVoice(client, channel, member, settings) {
@@ -118,33 +116,26 @@ async function applyPrivateVoice(client, channel, member, settings) {
             await channel.permissionOverwrites.edit(overwrite.id, { Connect: null, ViewChannel: null }, { type: overwrite.type });
             overriddenIds.push(overwrite.id);
         }, 5);
-        await channel.permissionOverwrites.edit(channel.guild.roles.everyone, { Connect: level === LEVEL.BOT_OWNER ? true : false, ViewChannel: true });
+        await channel.permissionOverwrites.edit(channel.guild.roles.everyone, { Connect: false, ViewChannel: true });
         overriddenIds.push(channel.guild.id);
 
         // Toujours laisser le propriétaire du salon entrer.
         await channel.permissionOverwrites.edit(member.id, { Connect: true, ViewChannel: true });
         overriddenIds.push(member.id);
 
-        // Owner / WL PV : les niveaux supérieurs ou égaux peuvent entrer par défaut.
-        if (level === LEVEL.OWNER || level === LEVEL.WL) {
-            const allowedIds = new Set();
-            // Owners déclarés dans guildSettings.
-            if (Array.isArray(settings.owners)) {
-                for (const id of settings.owners) allowedIds.add(String(id));
-            }
+        // Les Owners et propriétaires du bot peuvent toujours entrer ; les autres via =acces.
+        // Le type (0 = rôle, 1 = membre) est précisé : sans lui, discord.js refuse un ID
+        // absent de son cache et l'Owner restait bloqué sans aucune erreur visible.
+        const allowed = new Map();
+        for (const id of settings.owners || []) allowed.set(String(id), OverwriteType.Member);
+        for (const id of getBotOwnerIds(client)) allowed.set(id, OverwriteType.Member);
+        for (const id of settings.ownerRoles || []) allowed.set(String(id), OverwriteType.Role);
+        allowed.delete(member.id); // déjà autorisé ci-dessus
 
-            // Propriétaires du bot (CREATOR_IDS / client.owners / client.botOwners)
-            for (const id of getBotOwnerIds(client)) allowedIds.add(id);
-            for (const id of settings.ownerRoles || []) allowedIds.add(id);
-
-            // Retirer le propriétaire du salon (déjà ajouté ci-dessus).
-            allowedIds.delete(member.id);
-
-            await mapLimit([...allowedIds], async (id) => {
-                await channel.permissionOverwrites.edit(id, { Connect: true, ViewChannel: true });
-                overriddenIds.push(id);
-            }, 5);
-        }
+        await mapLimit([...allowed], async ([id, type]) => {
+            await channel.permissionOverwrites.edit(id, { Connect: true, ViewChannel: true }, { type });
+            overriddenIds.push(id);
+        }, 5);
 
         const pv = await PrivateVoice.create({
             channelId: channel.id,
@@ -157,12 +148,17 @@ async function applyPrivateVoice(client, channel, member, settings) {
             originalOverwrites,
         });
 
+        // Les personnes déjà dans le vocal y restent : accès temporaire, retiré dès qu'elles
+        // le quittent (voiceStateUpdate). Pour revenir ensuite, il leur faudra =acces.
+        const present = [];
         for (const occupant of channel.members.values()) {
             if (occupant.id === member.id || occupant.user.bot) continue;
-            if (!canJoinPrivateVoiceByLevel(level, await getAccessLevel(client, occupant, settings))) {
-                await occupant.voice.setChannel(null, 'PV: acces non autorise');
-            }
+            if (canJoinPrivateVoiceByLevel(level, await getAccessLevel(client, occupant, settings))) continue;
+            await channel.permissionOverwrites.edit(occupant.id, { Connect: true, ViewChannel: true }, { type: OverwriteType.Member });
+            overriddenIds.push(occupant.id);
+            present.push(occupant.id);
         }
+        if (present.length) await PrivateVoice.updateOne({ channelId: channel.id }, { $set: { present, overriddenIds } });
 
         return { pv, level };
     } catch (error) {
@@ -174,6 +170,25 @@ async function applyPrivateVoice(client, channel, member, settings) {
 
 // Rend le salon publique et purge toutes les permissions spécifiques du PV.
 // (La suppression du salon vide, si tempvoice, est gérée par voiceStateUpdate.)
+/**
+ * Une personne qui était déjà dans le vocal au moment du =pv vient de le quitter :
+ * son accès temporaire est retiré (sauf si elle a reçu =acces entre-temps).
+ */
+async function revokeTemporaryAccess(channel, pvRecord, memberId) {
+    if (!pvRecord?.present?.includes(memberId) || pvRecord.permitted?.includes(memberId)) return false;
+    const original = pvRecord.originalOverwrites?.[memberId];
+    if (channel?.permissionOverwrites) {
+        if (original) {
+            const flag = bit => ((BigInt(original.allow) & bit) !== 0n ? true : (BigInt(original.deny) & bit) !== 0n ? false : null);
+            await channel.permissionOverwrites.edit(memberId, { Connect: flag(PermissionFlagsBits.Connect), ViewChannel: flag(PermissionFlagsBits.ViewChannel) }, { type: original.type }).catch(() => {});
+        } else if (channel.permissionOverwrites.cache.has(memberId)) {
+            await channel.permissionOverwrites.delete(memberId).catch(() => {});
+        }
+    }
+    await PrivateVoice.updateOne({ channelId: pvRecord.channelId }, { $pull: { present: memberId, overriddenIds: memberId } });
+    return true;
+}
+
 async function restorePublicVoice(channel, pvRecord) {
     if (!channel || channel.deleted) return;
     if (pvRecord?.originalOverwrites) {
@@ -224,5 +239,6 @@ module.exports = {
     canManagePrivateVoice,
     applyPrivateVoice,
     restorePublicVoice,
+    revokeTemporaryAccess,
     PrivateVoice,
 };

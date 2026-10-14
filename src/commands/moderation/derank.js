@@ -20,19 +20,29 @@ module.exports = {
         if (!PermissionsHelper.canTarget(message.member, member)) return message.channel.send({ embeds: [EmbedHelper.error(message.t('general.higher_role'))] });
 
         const settings = message.guildSettings || await getGuildSettings(client, message.guild.id, { create: false });
-        let memberRoleId = settings?.roles?.member;
+        // Rôle remis après le derank : rôle membre configuré, sinon l'autorole d'arrivée,
+        // sinon un rôle nommé « membre(s) » / « member(s) ».
+        let memberRoleId = settings?.roles?.member || settings?.welcome?.autorole;
 
         if (!memberRoleId) {
-            const memberRole = message.guild.roles.cache.find(r => r.name.toLowerCase() === 'membres' || r.name.toLowerCase() === 'membre');
+            const memberRole = message.guild.roles.cache.find(r => /^\W*(membres?|members?)\W*$/i.test(r.name));
             if (memberRole) memberRoleId = memberRole.id;
         }
 
-        const protectedRoles = new Set(settings?.moderation?.noDerank || []);
+        // Rôles gardés : rôle membre, rôles donnés à l'arrivée (autorole, rôles de bienvenue),
+        // rôles protégés, et tout rôle dont le nom contient « membre » / « member ».
+        const protectedRoles = new Set([
+            ...(settings?.moderation?.noDerank || []),
+            settings?.welcome?.autorole,
+            ...(settings?.welcome?.roles || []),
+        ].filter(Boolean));
+        const isMemberRole = role => /membre|member/i.test(role.name);
         const botMember = message.guild.members.me;
         const rolesToRemove = member.roles.cache.filter(r =>
             r.id !== message.guild.id &&
             r.id !== memberRoleId &&
             !protectedRoles.has(r.id) &&
+            !isMemberRole(r) &&
             !r.managed &&
             r.position < botMember.roles.highest.position
         );

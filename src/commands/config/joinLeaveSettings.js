@@ -21,7 +21,7 @@ module.exports = {
             `**Message texte:** ${wl.message || 'Non défini'}`,
             `**Rôle auto:** ${wl.autorole ? `<@&${wl.autorole}>` : 'Aucun'}`,
             '',
-            '*Une belle carte de bienvenue avec l\'avatar du membre sera générée automatiquement !*'
+            '*Le message est envoyé en texte simple. Variables : `{user}`, `{server}`, `{memberCount}`*'
         ].join('\n'), { color: 0x5865F2 });
 
         const row = new ActionRowBuilder().addComponents(

@@ -21,11 +21,12 @@ module.exports = {
             return message.channel.send({ embeds: [EmbedHelper.error(`Il n'y a que **${history.length}** message(s) supprimé(s) en mémoire dans ce salon.`)] });
         }
 
-        const embed = EmbedHelper.info(`🎯 Message snipé de ${sniped.author.tag}`, sniped.content || '*Image uniquement*', { color: 0xFF0000 });
+        const embed = EmbedHelper.info(`Message snipé de ${sniped.author.tag}`, sniped.content || '*Image uniquement*', { color: 0xFF0000 });
         if (sniped.image) embed.setImage(sniped.image);
         embed.setTimestamp(sniped.timestamp);
         embed.setFooter({ text: `${index}/${history.length} · -snipe ${index < history.length ? index + 1 : 1} pour ${index < history.length ? 'le précédent' : 'revenir au plus récent'}` });
 
-        await message.channel.send({ embeds: [embed] });
+        // `raw` : le message du membre est affiché tel quel, emojis compris.
+        await message.channel.send({ embeds: [embed], raw: true });
     },
 };

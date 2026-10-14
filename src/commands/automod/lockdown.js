@@ -16,7 +16,7 @@ module.exports = {
         const guild = message.guild;
         const settings = message.guildSettings;
 
-        const usedAlias = message.content.trim().split(/\s+/)[0].replace(settings?.prefix || '-', '').toLowerCase();
+        const usedAlias = message.content.trim().split(/\s+/)[0].replace(settings?.prefix || client.prefix, '').toLowerCase();
         const isUnlock = usedAlias === 'unlockdown';
 
         const reason = isUnlock ? 'Unlock manuel' : 'Lockdown manuel';

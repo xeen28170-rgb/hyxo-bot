@@ -14,12 +14,10 @@ module.exports = {
     botPermissions: ['ManageRoles'],
     cooldown: 3,
     async run(client, message, args) {
-        if (!args[0] || !args[1]) return message.channel.send({ embeds: [EmbedHelper.error(`❌ Usage: \`${module.exports.usage}\``)] });
-
-        const member = await Helpers.resolveMember(message.guild, args[0]);
+        // Membre et rôle dans n'importe quel ordre, ou « +addrole @rôle » en réponse au message du membre.
+        if (!args.length) return message.channel.send({ embeds: [EmbedHelper.error(`Usage : \`${module.exports.usage}\` (dans n'importe quel ordre, ou en réponse au message du membre)`)] });
+        const { member, role } = await Helpers.resolveMemberAndRole(message, args);
         if (!member) return message.channel.send({ embeds: [EmbedHelper.error(message.t('general.invalid_user'))] });
-
-        const role = Helpers.resolveRole(message.guild, args.slice(1).join(' '));
         if (!role) return message.channel.send({ embeds: [EmbedHelper.error(message.t('general.invalid_role'))] });
         const settings = message.guildSettings || await getGuildSettings(client, message.guild.id);
         if (!await canManageRankRole(client, message.member, role, settings)) return message.channel.send({ embeds: [EmbedHelper.error('Votre rang ne permet pas de gerer ce role Owner/WL.')] });

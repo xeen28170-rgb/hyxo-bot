@@ -10,8 +10,12 @@ const { getGuildSettings } = require('../../utils/guildSettings');
 const BlacklistService = require('../../services/blacklistService');
 const MessageAutomation = require('../../services/messageAutomationService');
 const Logger = require('../../utils/logger');
+const QuizService = require('../../services/quizService');
+const PerfMonitor = require('../../utils/performanceMonitor');
 const { accessContext, commandAccess } = require('../../utils/commandAccess');
 const { context, presentationMessage } = require('../../utils/commandPresentation');
+
+const OWNER_PREFIX = '&';
 
 module.exports = {
     name: 'messageCreate',
@@ -26,6 +30,8 @@ module.exports = {
         const settings = await getGuildSettings(client, message.guild.id);
         message.guildSettings = settings;
         if (message.author.bot) {
+            // Appli lancée par un membre (invitation avec bouton « Rejoindre »…) : antilink.
+            if (message.interactionMetadata?.user && await AutomodService.checkAppMessage(client, message, settings)) return;
             await MessageAutomation.onMessage(message, settings);
             return;
         }
@@ -36,7 +42,7 @@ module.exports = {
         message.t = (key, vars) => client.translate(lang, key, vars);
 
         // Évite même la création d'une Promise sur le chemin courant.
-        if (settings.automod?.enabled) {
+        if (AutomodService.isActive(settings)) {
             const isBlocked = await AutomodService.check(client, message, settings);
             if (isBlocked) return;
         }
@@ -53,30 +59,37 @@ module.exports = {
         void MessageAutomation.onMessage(message, settings).catch(error => {
             Logger.error('[MessageAutomation]', error.message);
         });
+        // Réponse au quiz (une lettre seule dans le salon du quiz) : rien d'autre à faire.
+        if (await QuizService.onMessage(message)) return;
+
         const prefix = settings.prefix || client.prefix;
-        const usedPrefix = content.startsWith('=')
-            ? '='
-            : (content.startsWith(prefix) ? prefix : null);
+        // « & » : préfixe réservé aux commandes de type bl / wet (et elles n'acceptent que lui).
+        const usedPrefix = content.startsWith(OWNER_PREFIX)
+            ? OWNER_PREFIX
+            : content.startsWith('=')
+                ? '='
+                : (content.startsWith(prefix) ? prefix : null);
         if (!usedPrefix) return;
 
         const args = content.slice(usedPrefix.length).trim().split(/ +/);
         const commandName = args.shift().toLowerCase();
 
-        let command = client.commands.get(commandName);
+        const findCommand = name => client.commands.get(name) || client.commands.get(client.aliases.get(name));
 
-        if (!command && args.length > 0) {
-            const twoWordName = `${commandName} ${args[0].toLowerCase()}`;
-            const twoWordCommand = client.commands.get(twoWordName) || client.commands.get(client.aliases.get(twoWordName));
-            if (twoWordCommand) {
-                command = twoWordCommand;
-                args.shift();
-            }
+        // Commande en deux mots d'abord (« set perm », « ticket manage » → ticket-manage) :
+        // sinon « set » ou « ticket » seul passait avant et la commande voulue n'était jamais lancée.
+        let command = null;
+        if (args.length > 0) {
+            const second = args[0].toLowerCase();
+            command = findCommand(`${commandName} ${second}`) || findCommand(`${commandName}-${second}`);
+            if (command) args.shift();
         }
-
-        if (!command) {
-            const aliasTarget = client.aliases.get(commandName);
-            if (aliasTarget) command = client.commands.get(aliasTarget);
-        }
+        if (!command) command = findCommand(commandName);
+        // Sans tiret : « joinsettings » → join-settings.
+        if (!command) command = findCompactCommand(client, commandName);
+        // Commande « & » tapée avec + (ou l'inverse) : ignorée. Un serveur qui a choisi « & »
+        // comme préfixe garde l'accès à toutes ses commandes.
+        if (command && prefix !== OWNER_PREFIX && (command.prefix === OWNER_PREFIX) !== (usedPrefix === OWNER_PREFIX)) command = null;
 
         if (command) {
             const typing = setTimeout(() => {
@@ -105,8 +118,16 @@ module.exports = {
                     client.cache.setCooldown(message.author.id, command.name, command.cooldown * 1000);
                 }
 
-                const wrapped = presentationMessage(MessageAutomation.commandMessage(message, command, settings), command);
-                await context.run({ command, prefix: usedPrefix }, () => command.run(client, wrapped, args));
+                const replies = [];
+                const startedAt = Date.now();
+                const wrapped = MessageAutomation.trackReplies(presentationMessage(MessageAutomation.commandMessage(message, command, settings), command), replies);
+                try {
+                    await context.run({ command, prefix: usedPrefix }, () => command.run(client, wrapped, args));
+                } finally {
+                    // Commande faite : son message disparaît, les confirmations après 10 s.
+                    MessageAutomation.cleanupAfterCommand(message, replies, settings);
+                    PerfMonitor.recordCommand(command.name, message.createdTimestamp, startedAt);
+                }
             } catch (error) {
                 require('../../utils/logger').error(`Erreur commande ${command.name}:`, { message: error.message, stack: error.stack });
                 const LogDispatcher = require('../../utils/logDispatcher');
@@ -124,11 +145,12 @@ module.exports = {
             return;
         }
 
+        if (usedPrefix === OWNER_PREFIX && prefix !== OWNER_PREFIX) return; // « & » ne lance pas les commandes perso
         const custom = await CustomCommand.findOne({ guildId: message.guild.id, name: commandName });
         if (custom) {
             // Mentions jamais autorisées dans la réponse : un owner malveillant (ou un
             // hook compromis) pourrait utiliser l'anti-ghostping pour mentionner @everyone.
-            const sendOptions = { allowedMentions: { parse: [] } };
+            const sendOptions = { allowedMentions: { parse: [] }, raw: true };
             if (custom.embed) {
                 try {
                     const embedData = JSON.parse(custom.response);
@@ -142,6 +164,23 @@ module.exports = {
         }
     }
 };
+
+// Index « nom sans tiret » → commande, recalculé seulement si la liste des commandes change.
+let compactIndex = null;
+function findCompactCommand(client, name) {
+    const compact = name.replace(/-/g, '');
+    if (!compact) return null;
+    if (!compactIndex || compactIndex.size !== client.commands.size) {
+        compactIndex = { size: client.commands.size, map: new Map() };
+        for (const command of client.commands.values()) {
+            for (const key of [command.name, ...(command.aliases || [])]) {
+                const k = key.replace(/[-\s]/g, '');
+                if (!compactIndex.map.has(k)) compactIndex.map.set(k, command);
+            }
+        }
+    }
+    return compactIndex.map.get(compact) || null;
+}
 
 async function handleDM(client, message) {
     await message.channel.send('Les messages privés ne sont pas supportés pour le moment.');

@@ -3,6 +3,8 @@
 module.exports = Object.freeze({
     name: 'HYXO',
     footer: 'Hyxo',
+    // Préfixe par défaut des commandes (la variable PREFIX du .env peut le changer).
+    prefix: '+',
     colors: Object.freeze({
         PRIMARY: 0x737B87,
         SUCCESS: 0x55CFA4,

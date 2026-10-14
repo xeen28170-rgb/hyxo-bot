@@ -4,10 +4,13 @@ const Blacklist = require('../../models/Blacklist');
 const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
 const BlacklistService = require('../../services/blacklistService');
+const SanctionCard = require('../../services/sanctionCard');
 
 module.exports = {
     name: 'bl',
     category: 'owners',
+    // Préfixe réservé : &bl, &unbl, &unblall (ne marche pas avec le préfixe normal).
+    prefix: '&',
     ownerOnly: true,
     description: 'Blackliste un utilisateur sur le bot.',
     usage: '<@membre/ID>',
@@ -31,6 +34,17 @@ module.exports = {
 
         const result = await BlacklistService.enforceUser(client, target.id);
 
-        return message.channel.send({ embeds: [EmbedHelper.success(`<@${target.id}> ajoute a la blacklist. Serveurs proteges : ${result.banned}. Echecs a reessayer : ${result.failed}.`)] });
+        // Même présentation que le ban, avec la fiche de sanction.
+        const embed = EmbedHelper.info(
+            'Blacklist',
+            `**${target.username}** a été ajouté à la blacklist du bot.\n**Serveurs** — banni de ${result.banned} serveur(s)${result.failed ? `, ${result.failed} à réessayer` : ''}\n**Raison** — ${reason}`,
+            { color: EmbedHelper.Colors.ERROR },
+        );
+        embed.setThumbnail(target.displayAvatarURL({ dynamic: true }));
+        embed.setFooter({ text: `ID : ${target.id}` });
+
+        return SanctionCard.send(message.channel, embed, {
+            type: 'blacklist', user: target, moderator: message.author, reason, duration: 'définitif',
+        });
     },
 };

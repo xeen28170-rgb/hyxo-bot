@@ -4,11 +4,25 @@ const EmbedHelper = require('../../utils/embedBuilder');
 const Helpers = require('../../utils/helpers');
 const { mapLimit } = require('../../utils/concurrency');
 
+// Suppression d'un paquet (100 max) : en masse, sinon un par un si Discord refuse.
+async function removeMessages(channel, list) {
+    if (list.length === 1) return list[0].delete().then(() => 1).catch(() => 0);
+    try {
+        return (await channel.bulkDelete(list, true)).size;
+    } catch {
+        let count = 0;
+        for (const m of list) {
+            try { await m.delete(); count++; } catch { /* déjà supprimé */ }
+        }
+        return count;
+    }
+}
+
 module.exports = {
     name: 'clear',
     category: 'moderation',
-    description: 'Supprimer des messages.',
-    usage: '-clear [nombre]',
+    description: 'Supprimer tous les messages du salon, ou tous ceux d\'une personne (mention ou ID).',
+    usage: '-clear [@membre/ID] [nombre]',
     permissions: ['ManageMessages'],
     botPermissions: ['ManageMessages'],
     async run(client, message, args) {
@@ -38,37 +52,40 @@ module.exports = {
         }
 
         const guildSettings = message.guildSettings || client.cache.getGuild(message.guild.id);
-        const maxLimit = guildSettings?.moderation?.clearLimit || 100;
+        // Limite fixée par le serveur (+clear limit), sinon aucune : tout ce qui peut l'être.
+        const serverLimit = guildSettings?.moderation?.clearLimit || null;
 
-        let amount = parseInt(args[0]) || maxLimit;
-        const target = await Helpers.resolveMember(message.guild, args[1]);
-
-        if (amount > maxLimit) amount = maxLimit;
-
-        let messages = await message.channel.messages.fetch({ limit: amount });
-        if (target) {
-            messages = messages.filter(m => m.author.id === target.id);
-        }
-
-        // Ne garder que les messages encore existants et non épinglés.
-        messages = messages.filter(m => m && !m.deleted && !m.pinned);
+        // « +clear » : tous les messages possibles du salon. « +clear @membre » (ou son ID) :
+        // tous ses messages dans ce salon. Un nombre, placé n'importe où, limite la suppression.
+        const targetId = args.map(arg => Helpers.resolveUserId(arg)).find(Boolean) || null;
+        const number = args.map(arg => (/^\d{1,5}$/.test(arg) ? parseInt(arg, 10) : null)).find(n => n > 0) || null;
+        const wanted = Math.min(number || Infinity, serverLimit || Infinity);
 
         await message.delete().catch(() => {});
 
-        let deleted;
-        try {
-            deleted = await message.channel.bulkDelete([...messages.values()], true);
-        } catch {
-            // Fallback : suppression message par message si bulkDelete échoue
-            // (messages supprimés entre-temps, trop anciens, etc.)
-            let count = 0;
-            for (const m of messages.values()) {
-                try { await m.delete(); count++; } catch { /* déjà supprimé */ }
-            }
-            deleted = { size: count };
+        // Discord ne supprime en masse que les messages de moins de 14 jours : les plus anciens restent.
+        const tooOld = Date.now() - 14 * 24 * 60 * 60 * 1000 + 60_000;
+        const keep = m => m && m.id !== message.id && !m.pinned && m.createdTimestamp > tooOld
+            && (!targetId || m.author?.id === targetId);
+
+        // On parcourt le salon par pages de 100 et on supprime au fur et à mesure.
+        let deleted = 0;
+        let before;
+        for (let page = 0; page < 100 && deleted < wanted; page++) {
+            const batch = await message.channel.messages.fetch({ limit: 100, before }).catch(() => null);
+            if (!batch?.size) break;
+            const chunk = [...batch.values()].filter(keep).slice(0, wanted - deleted);
+            if (chunk.length) deleted += await removeMessages(message.channel, chunk);
+            before = batch.last().id;
+            if (batch.size < 100 || batch.last().createdTimestamp <= tooOld) break;
         }
 
-        const msg = await message.channel.send({ embeds: [EmbedHelper.success(`🧹 **${deleted.size}** messages ont été supprimés.`)] });
+        if (!deleted) {
+            return message.channel.send({ embeds: [EmbedHelper.error(targetId ? `Aucun message récent de <@${targetId}> dans ce salon.` : 'Aucun message à supprimer (Discord ne permet pas de supprimer en masse les messages de plus de 14 jours).')], allowedMentions: { parse: [] } });
+        }
+
+        const who = targetId ? ` de <@${targetId}>` : '';
+        const msg = await message.channel.send({ embeds: [EmbedHelper.success(`🧹 **${deleted}** message(s)${who} supprimé(s).`)], allowedMentions: { parse: [] } });
         setTimeout(() => msg.delete().catch(() => {}), 3000);
     },
 };

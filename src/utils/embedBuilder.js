@@ -50,6 +50,8 @@ function statusEmbed(kind, description, options = {}) {
     // Some commands already include the status icon; keep exactly one.
     const clean = body.replace(/^(?:(?:✅|❌|⚠️?|✔️?|✖️?)\s*)+/u, '');
     const embed = new EmbedBuilder().setColor(Colors[kind]);
+    // Réponse courte (succès / erreur / avertissement) : supprimable après la commande.
+    Object.defineProperty(embed, 'statusKind', { value: kind, enumerable: false });
     if (hasTitle) {
         embed.setTitle(String(description)).setDescription(clean);
     } else {

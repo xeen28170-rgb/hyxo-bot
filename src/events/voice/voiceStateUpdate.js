@@ -7,7 +7,7 @@ const Leash = require('../../models/Leash');
 const { scheduleStatsUpdate } = require('../../commands/logs/statschannels');
 const { ChannelType, PermissionFlagsBits } = require('discord.js');
 const { getGuildSettings } = require('../../utils/guildSettings');
-const { restorePublicVoice, PrivateVoice, getAccessLevel, canJoinPrivateVoiceByLevel } = require('../../utils/privateVoice');
+const { restorePublicVoice, revokeTemporaryAccess, PrivateVoice, getAccessLevel, canJoinPrivateVoiceByLevel } = require('../../utils/privateVoice');
 const { sendPanel, scheduleRefresh } = require('../../utils/tempvoicePanel');
 
 // Membres dont un salon temporaire est en cours de création : évite les doublons si la
@@ -61,8 +61,13 @@ async function handlePrivateVoiceLeave(guild, oldState, newState) {
 
     const pv = await PrivateVoice.findOne({ channelId: oldChannelId });
     if (!pv) return;
+    // Quelqu'un d'autre part : s'il était là avant le =pv, il perd son accès temporaire.
+    if (oldState.member?.id !== pv.ownerId) {
+        const channel = guild.channels.cache.get(oldChannelId);
+        await revokeTemporaryAccess(channel, pv, oldState.member?.id).catch(() => {});
+        return;
+    }
     // Seul le départ du propriétaire du PV déclenche la restauration.
-    if (oldState.member?.id !== pv.ownerId) return;
 
     // La purge de l'enregistrement doit TOUJOURS avoir lieu, même si la restauration
     // échoue (ex: salon détruit entre-temps par le nettoyage tempvoc plus bas dans ce

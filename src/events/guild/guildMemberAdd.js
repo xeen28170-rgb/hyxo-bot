@@ -1,6 +1,5 @@
 'use strict';
 
-const { EmbedBuilder } = require('discord.js');
 const EmbedHelper = require('../../utils/embedBuilder');
 const AntiraidService = require('../../services/antiraidService');
 const LogDispatcher = require('../../utils/logDispatcher');
@@ -9,6 +8,35 @@ const { scheduleStatsUpdate } = require('../../commands/logs/statschannels');
 const { getGuildSettings } = require('../../utils/guildSettings');
 const PrisonService = require('../../services/prisonService');
 const BlacklistService = require('../../services/blacklistService');
+const WetService = require('../../services/wetService');
+
+async function sendWelcome(guild, member, settings) {
+    if (!settings?.welcome?.enabled || !settings?.welcome?.channel) return;
+    const welcomeChannel = guild.channels.cache.get(settings.welcome.channel);
+    if (!welcomeChannel) return;
+    // Message texte simple, sans embed. Sans {user} dans le texte, on mentionne
+    // quand même le membre au début pour qu'il soit notifié.
+    const template = settings.welcome.message || 'Bienvenue {user} sur **{server}** !';
+    let text = template
+        .replace(/{user}/g, () => `<@${member.id}>`)
+        .replace(/{server}/g, () => guild.name)
+        .replace(/{memberCount}/g, () => String(guild.memberCount));
+    if (!template.includes('{user}')) text = `<@${member.id}> ${text}`;
+    await welcomeChannel.send({
+        content: text.slice(0, 2000),
+        allowedMentions: { users: [member.id] },
+        raw: true,
+    }).catch(() => {});
+}
+
+// Tous les rôles d'arrivée (autorole + rôles de bienvenue) en UN seul appel Discord.
+async function addJoinRoles(guild, member, settings) {
+    const ids = [...new Set([settings?.welcome?.autorole, ...(settings?.welcome?.roles || [])].filter(Boolean))];
+    if (!ids.length) return;
+    const resolved = await Promise.all(ids.map(roleId => guild.roles.cache.get(roleId) || guild.roles.fetch(roleId).catch(() => null)));
+    const roles = resolved.filter(Boolean);
+    if (roles.length) await member.roles.add(roles).catch(() => {});
+}
 
 module.exports = {
     name: 'guildMemberAdd',
@@ -16,25 +44,14 @@ module.exports = {
         try {
             const guild = member.guild;
             if (await BlacklistService.onJoin(member)) return;
+            if (await WetService.onJoin(member)) return;
 
             const settings = await getGuildSettings(client, guild.id);
-            await PrisonService.restorePrisonRole(client, member);
 
-            if (settings?.antiraid?.enabled) {
-                await AntiraidService.handleMemberJoin(client, member, settings);
-            }
+            // Antiraid d'abord : un compte expulsé ne reçoit pas de message de bienvenue.
+            if (settings?.antiraid?.enabled && await AntiraidService.handleMemberJoin(client, member, settings)) return;
 
             scheduleStatsUpdate(client, guild, 'member_add', 15_000);
-
-            // Tous les rôles d'arrivée (autorole + rôles de bienvenue) en UN seul appel Discord,
-            // au lieu d'un appel par rôle (avec fetch éventuel) en série.
-            const welcomeRoleIds = [...new Set([settings?.welcome?.autorole, ...(settings?.welcome?.roles || [])].filter(Boolean))];
-            if (welcomeRoleIds.length) {
-                const resolved = await Promise.all(welcomeRoleIds.map(roleId =>
-                    guild.roles.cache.get(roleId) || guild.roles.fetch(roleId).catch(() => null)));
-                const rolesToAdd = resolved.filter(Boolean);
-                if (rolesToAdd.length) await member.roles.add(rolesToAdd).catch(() => {});
-            }
 
             const joinEmbed = EmbedHelper.info('📥 Arrivée d\'un membre', [
                 `**Utilisateur:** ${member.user} (\`${member.id}\`)`,
@@ -52,31 +69,15 @@ module.exports = {
                 Logger.error('[guildMemberAdd] Log arrivée:', { message: err.message });
             });
 
-            if (settings?.welcome?.enabled && settings?.welcome?.channel) {
-                const welcomeChannel = guild.channels.cache.get(settings.welcome.channel);
-                if (welcomeChannel) {
-                    // Le message personnalisé du serveur (-welcome) devient le texte de l'embed.
-                    const text = (settings.welcome.message || 'Installe-toi sur **{server}**, on est content de te voir.')
-                        .replace(/{user}/g, () => `<@${member.id}>`)
-                        .replace(/{server}/g, () => guild.name)
-                        .replace(/{memberCount}/g, () => String(guild.memberCount));
-
-                    const embed = new EmbedBuilder()
-                        .setColor(0x3BD47E)
-                        .setAuthor({ name: `Membre #${guild.memberCount}` })
-                        .setTitle(`Bienvenue ${member.displayName}`)
-                        .setDescription(text.slice(0, 1000))
-                        .setThumbnail(member.user.displayAvatarURL({ size: 256 }));
-
-                    // La mention reste hors de l'embed pour que le membre soit notifié.
-                    await welcomeChannel.send({
-                        content: `<@${member.id}>`,
-                        embeds: [embed],
-                        allowedMentions: { users: [member.id] },
-                    }).catch(() => {});
-                }
-            }
-
+            // Message de bienvenue, rôles d'arrivée et prison EN MÊME TEMPS : avant, le message
+            // attendait l'ajout des rôles (appel Discord parfois lent) et arrivait bien après.
+            await Promise.all([
+                sendWelcome(guild, member, settings),
+                addJoinRoles(guild, member, settings),
+                PrisonService.restorePrisonRole(client, member).catch(error => {
+                    Logger.error('[guildMemberAdd] Prison:', error.message);
+                }),
+            ]);
         } catch (err) {
             Logger.error('[guildMemberAdd] Erreur:', { message: err.message, stack: err.stack });
         }

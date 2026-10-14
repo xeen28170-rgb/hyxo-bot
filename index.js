@@ -66,13 +66,16 @@ const client = new Client({
         parse: ['users', 'roles'],
         repliedUser: false,
     },
+    // Le message de commande est supprimé après coup : une réponse « en réponse à »
+    // ce message est alors envoyée normalement au lieu d'échouer.
+    failIfNotExists: false,
     rest: {
         timeout: 15000,
         retries: 3,
     },
 });
 
-// Rendu « panneau moderne » (Components V2) + emojis Hyxo pour tous les messages.
+// Rendu « panneau moderne » (Components V2), sans emojis, pour tous les messages.
 require('./src/utils/componentsV2').install(client);
 
 client.commands = new Collection();
@@ -95,7 +98,10 @@ client.botOwners = new Set(
 
 client.owners = new Set(client.botOwners);
 
-client.prefix = process.env.PREFIX || '-';
+// Même règle que le modèle Guild : « PREFIX=- » (ancien défaut) est ignoré au profit de « + ».
+client.prefix = (process.env.PREFIX || '').trim() && process.env.PREFIX.trim() !== '-'
+    ? process.env.PREFIX.trim()
+    : require('./src/config/brand').prefix;
 client.defaultLanguage = process.env.DEFAULT_LANGUAGE || 'fr';
 client.version = require('./package.json').version;
 client.startTime = Date.now();
@@ -145,9 +151,8 @@ function purgeOrphanTempFiles() {
 }
 
 async function initialize() {
-    // Ne pas effacer la console hors terminal interactif (ex: Pterodactyl/PM2),
-    // sinon on perd des logs de démarrage utiles.
-    if (process.stdout.isTTY) console.clear();
+    // Pas de console.clear() : Pterodactyl affiche son code d'effacement en clair
+    // (« [1;1H[0J ») et l'effacement ferait perdre les logs de démarrage.
     Logger.banner();
 
     try {
@@ -158,6 +163,12 @@ async function initialize() {
         // Nettoie les fichiers temporaires orphelins (écritures atomique interrompues)
         // laissés dans le dossier data lors d'un arrêt brutal du process.
         purgeOrphanTempFiles();
+
+        // Dossier data vidé ou remplacé (nouvel envoi du code) : toutes les données sont
+        // remises depuis la sauvegarde Discord AVANT de les charger. Rien n'est fait si
+        // data est déjà à jour ; en cas de souci réseau, le bot démarre avec ses fichiers.
+        Logger.info('Vérification de la sauvegarde Discord...');
+        await require('./src/services/configCloudService').restoreBeforeLogin(process.env.TOKEN);
 
         Logger.info('Initialisation du cache...');
         await client.cache.init();
@@ -191,6 +202,8 @@ async function initialize() {
 }
 
 AntiCrash.init(client);
+// Diagnostic des lenteurs (blocage du bot, processeur, commandes lentes) : avertit dans la console.
+require('./src/utils/performanceMonitor').start();
 
 // Graceful shutdown: flush all pending JSON saves BEFORE destroying the client.
 // Handler unique (antiCrash n'enregistre plus SIGINT/SIGTERM) pour garantir que

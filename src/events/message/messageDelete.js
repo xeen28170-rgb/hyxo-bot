@@ -3,6 +3,7 @@
 const LogDispatcher = require('../../utils/logDispatcher');
 const EmbedHelper = require('../../utils/embedBuilder');
 const AutomodService = require('../../services/automodService');
+const MessageAutomation = require('../../services/messageAutomationService');
 const { getGuildSettings } = require('../../utils/guildSettings');
 
 const SNIPE_HISTORY = 10;
@@ -10,6 +11,8 @@ const SNIPE_HISTORY = 10;
 module.exports = {
     name: 'messageDelete',
     async run(client, message) {
+        // Message de commande supprimé par le bot lui-même après l'avoir exécutée.
+        if (MessageAutomation.wasCleanedUp(message.id)) return;
         if (message.partial) {
             try {
                 message = await message.fetch();

@@ -8,10 +8,11 @@ module.exports = {
     name: 'autodelete',
     category: 'config',
     description: 'Active/désactive la suppression automatique des commandes ou des réponses',
-    usage: '<moderation/snipe> <commande/reply> <on/off/durée>',
+    usage: '<tout/moderation/snipe> <commande/reply> <on/off/durée>',
     permissions: ['Administrator'],
     async run(client, message, args) {
-        const scope = args[0]?.toLowerCase();
+        // « tout » : toutes les commandes (actif par défaut, cf. messageAutomationService).
+        const scope = ({ tout: 'all', toutes: 'all', all: 'all' })[args[0]?.toLowerCase()] || args[0]?.toLowerCase();
         const target = args[1]?.toLowerCase();
         const status = args[2]?.toLowerCase();
 
@@ -19,8 +20,8 @@ module.exports = {
             return message.channel.send({ embeds: [EmbedHelper.error(`Usage: \`${this.usage}\``)] });
         }
 
-        if (!['moderation', 'snipe'].includes(scope)) {
-            return message.channel.send({ embeds: [EmbedHelper.error('Type invalide. Utilisez `moderation` ou `snipe`.')] });
+        if (!['all', 'moderation', 'snipe'].includes(scope)) {
+            return message.channel.send({ embeds: [EmbedHelper.error('Type invalide. Utilisez `tout`, `moderation` ou `snipe`.')] });
         }
 
         if (!['commande', 'reply'].includes(target)) {
@@ -40,13 +41,15 @@ module.exports = {
         const previous = settings.autodelete?.[scope];
         const value = previous?.target ? { [previous.target]: { duration: previous.duration } } : { ...previous };
         value[target] = isOff ? null : { duration: isValidDuration ? status : null };
+        if (scope === 'all' && !isOff && target === 'commande') value[target] = {};
 
         await Guild.updateOne({ guildId: message.guild.id }, { [key]: value });
         client.cache.invalidateGuild(message.guild.id);
 
+        const label = scope === 'all' ? 'toutes les commandes' : scope;
         const msg = isOff
-            ? `Autodelete **${scope}** désactivé.`
-            : `Autodelete **${scope}** activé sur les ${target === 'commande' ? 'commandes' : 'réponses'}${isValidDuration ? ` (${status})` : ''}.`;
+            ? `Autodelete **${label}** désactivé sur les ${target === 'commande' ? 'commandes' : 'réponses'}.`
+            : `Autodelete **${label}** activé sur les ${target === 'commande' ? 'commandes' : 'réponses'}${isValidDuration ? ` (${status})` : ''}.`;
 
         message.channel.send({ embeds: [EmbedHelper.success(msg)] });
     },

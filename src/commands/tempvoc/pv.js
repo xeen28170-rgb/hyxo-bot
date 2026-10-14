@@ -40,11 +40,7 @@ module.exports = {
             `**Salon:** <#${channel.id}>`,
             `**Rendu privé par:** ${message.member} (${pv.accessLevel})`,
             '',
-            pv.accessLevel === 'Owner Bot'
-                ? '_Tout le monde peut rejoindre ce vocal prive._'
-                : pv.accessLevel === 'Owner'
-                    ? '_Le proprietaire du bot et les Owners peuvent rejoindre. Les WL et les membres doivent etre autorises avec_ `=acces`_.'
-                    : '_Le proprietaire du bot et les Owners peuvent rejoindre. Les WL et les membres doivent etre autorises avec_ `=acces`_.',
+            'Le propriétaire du bot et les Owners peuvent rejoindre. Les WL et les membres doivent être autorisés avec `=acces`.',
             '',
             'Le salon redeviendra public automatiquement dès que vous le quittez.',
         ].join('\n');

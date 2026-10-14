@@ -20,6 +20,8 @@ const W = 800, H = 300;
 
 const STYLES = {
     ban: { color: '#FF2D4B', stamp: 'BANNI', header: 'FICHE DE SANCTION', anim: 'slam' },
+    blacklist: { color: '#FF2D4B', stamp: 'BLACKLIST', header: 'FICHE DE SANCTION', anim: 'slam' },
+    wet: { color: '#FF2D4B', stamp: 'WET', header: 'FICHE DE SANCTION', anim: 'slam' },
     tempban: { color: '#FF2D4B', stamp: 'BANNI', header: 'FICHE DE SANCTION', anim: 'slam' },
     kick: { color: '#FF8A3D', stamp: 'EXPULSÉ', header: 'FICHE DE SANCTION', anim: 'kick' },
     mute: { color: '#A970FF', stamp: 'MUET', header: 'FICHE DE SANCTION', anim: 'tape' },
@@ -49,7 +51,7 @@ const renderWithFonts = (svg, zoom = 1) => new Resvg(svg, {
 function stampSvg(text, color) {
     return `<rect x="-118" y="-40" width="236" height="80" rx="10" fill="#0B0B0F" fill-opacity=".55" stroke="${color}" stroke-width="6"/>
         <rect x="-108" y="-30" width="216" height="60" rx="6" fill="none" stroke="${color}" stroke-width="2" opacity=".7"/>
-        <text x="0" y="15" text-anchor="middle" font-family="Anton" font-size="${text.length > 6 ? 38 : 44}" letter-spacing="6" fill="${color}">${text}</text>`;
+        <text x="0" y="15" text-anchor="middle" font-family="Anton" font-size="${text.length > 8 ? 30 : text.length > 6 ? 38 : 44}" letter-spacing="6" fill="${color}">${text}</text>`;
 }
 
 /** Tampon à plat en double résolution ; tourné et agrandi à chaque image. */

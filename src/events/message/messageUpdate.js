@@ -20,7 +20,7 @@ module.exports = {
 
         const settings = await getGuildSettings(client, guild.id);
 
-        if (settings.automod?.enabled) {
+        if (AutomodService.isActive(settings)) {
             const blocked = await AutomodService.check(client, newMessage, settings);
             if (blocked) return;
         }

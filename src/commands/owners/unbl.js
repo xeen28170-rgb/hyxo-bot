@@ -8,6 +8,8 @@ const Embed = require('../../utils/embedBuilder');
 module.exports = {
     name: 'unbl',
     category: 'owners',
+    // Préfixe réservé : &bl, &unbl, &unblall (ne marche pas avec le préfixe normal).
+    prefix: '&',
     ownerOnly: true,
     usage: '-unbl <ID|@mention>',
     description: 'Retire un utilisateur de la blacklist globale.',

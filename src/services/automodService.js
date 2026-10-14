@@ -21,15 +21,92 @@ let lastFloodSweep = 0;
 const FLOOD_SWEEP_INTERVAL = 60 * 60 * 1000; // 1 h
 const FLOOD_ENTRY_TTL = 30 * 60 * 1000;      // 30 min
 
-// Sans http/www, on exige une extension de domaine connue : « ok.merci » n'est pas un lien.
-const LINK_REGEX = /(?:https?:\/\/|www\.)[^\s]+|\b(?:[a-z0-9-]+\.)+(?:com|net|org|fr|io|gg|xyz|me|tv|co|be|ch|ca|de|uk|us|eu|info|app|dev|link|ly|to|ru|es|it|site|online|shop|store|live|pro|biz|club|gl|cc|ws|tk|ml|ga|cf|gq)\b(?:\/[^\s]*)?/i;
-const INVITE_REGEX = /(?:discord\.gg|discord(?:app)?\.com\/invite|invite\.gg|dsc\.gg|discord\.me)\/[a-z0-9-]+/i;
+// Sans http/www, on exige une extension de domaine connue (« ok.merci » n'est pas un lien),
+// ou un chemin après le domaine (« site.abc/page »).
+const LINK_REGEX = /(?:https?:\/\/|www\.)[^\s]+|\b(?:[a-z0-9-]+\.)+(?:com|net|org|fr|io|gg|xyz|me|tv|co|be|ch|ca|de|uk|us|eu|info|app|dev|link|ly|to|ru|es|it|site|online|shop|store|live|pro|biz|club|gl|cc|ws|tk|ml|ga|cf|gq|ai|sh|so|top|click|lol|gift|win|vip|cloud|space|website|fun|icu|cn|in|nl|pl|pt|br|tech|fyi|bio|page|plus|pw|su|ink|one)\b(?:\/[^\s]*)?|\b[a-z0-9-]{2,}\.[a-z]{2,24}\/[^\s]*/i;
+const INVITE_REGEX = /(?:discord(?:app)?\.(?:gg|io|me|li|com\/invite)|invite\.gg|dsc\.gg|discord\.com\/servers)\/[a-z0-9-]+/i;
+// Cadeaux Nitro (vrais ou faux) et faux domaines Discord d'arnaque (« dlscord », « disc0rd »…).
+const GIFT_REGEX = /(?:discord(?:app)?\.(?:gift|com\/gifts?|com\/billing\/promotions)|promos\.discord\.gg)\/?[a-z0-9-]*|\b(?!discord(?:app)?\.)d[i1l!]{1,2}s?[ckq][o0]{1,2}r[dt][a-z0-9-]*(?:\.(?:com|net|org|gift|gg|xyz|ru|site|online|shop|store|io|me|ly|to|app|link|click|top|fun|icu|cc|pw|su|win|vip|space|website|live|pro)\b|\.[a-z]{2,24}\/)|\bn[i1]tr[o0][a-z0-9-]*(?:\.(?:com|net|org|gift|gg|xyz|ru|site|online|shop|store|io|me|ly|to|app|link|click|top|fun|icu|cc|pw|su|win|vip|space|website|live|pro)\b|\.[a-z]{2,24}\/)/i;
+const LINK_REASONS = new Set(['link', 'invite', 'gift']);
+const LINK_BURST = { count: 3, window: 30_000 };
+const WARN_COOLDOWN = 8_000;
+const linkBursts = new Map();    // guildId:userId → horodatages des derniers liens bloqués
+const warnCooldowns = new Map(); // guildId:userId → fin de la pause entre deux avertissements
+
+/**
+ * Tout le texte d'un message où un lien peut se cacher : contenu, embeds, boutons
+ * (« Rejoindre »), messages transférés. Les déguisements courants (« discord . gg »,
+ * « discord[.]gg », caractères invisibles) sont retirés pour la détection.
+ */
+function messageLinkText(message) {
+    const parts = [message.content || ''];
+    const addEmbeds = embeds => {
+        for (const e of embeds || []) {
+            parts.push(e.url, e.title, e.description, e.author?.url, e.footer?.text, ...(e.fields || []).flatMap(f => [f.name, f.value]));
+        }
+    };
+    const addComponents = components => {
+        for (const c of components || []) {
+            const data = c.data ?? c;
+            if (data.url) parts.push(data.url);
+            if (typeof data.content === 'string') parts.push(data.content);
+            addComponents(c.components);
+            if (c.accessory) addComponents([c.accessory]);
+        }
+    };
+    addEmbeds(message.embeds);
+    addComponents(message.components);
+    for (const snapshot of message.messageSnapshots?.values?.() || []) {
+        parts.push(snapshot.content || '');
+        addEmbeds(snapshot.embeds);
+        addComponents(snapshot.components);
+    }
+    return parts.filter(Boolean).join('\n')
+        .replace(/[\u200B-\u200D\u2060\uFEFF]/g, '')
+        .replace(/\s*(?:\[\.\]|\(\.\)|\{\.\}|\[dot\]|\(dot\))\s*/gi, '.')
+        .replace(/[ \t]*([./\\])[ \t]*/g, '$1')
+        .replace(/\\/g, '/');
+}
+
+/** Retire les domaines autorisés avant de chercher les liens restants. */
+function withoutWhitelisted(text, whitelist = []) {
+    let out = String(text || '').toLowerCase();
+    for (const entry of whitelist || []) if (entry) out = out.split(String(entry).toLowerCase()).join(' ');
+    return out;
+}
+
+/** Lien interdit dans le message, selon le mode : 'all' (tout lien) ou 'invite' (Discord). */
+function findLinkViolation(message, whitelist, mode) {
+    const text = withoutWhitelisted(messageLinkText(message), whitelist);
+    if (GIFT_REGEX.test(text)) return 'gift';
+    // message.activity : invitation « Rejoindre » vers un jeu ou une activité Discord.
+    if (INVITE_REGEX.test(text) || message.activity) return 'invite';
+    if (mode !== 'invite' && LINK_REGEX.test(text)) return 'link';
+    return null;
+}
+
+const LINK_WARNINGS = {
+    link: 'les liens ne sont pas autorisés ici',
+    invite: 'les invitations vers d\'autres serveurs ne sont pas autorisées ici',
+    gift: 'les liens cadeaux (Nitro) ne sont pas autorisés ici',
+};
+
+// L'automod tourne dès qu'une protection est activée : avant, « +antilink on » ne servait
+// à rien tant que l'interrupteur général automod.enabled n'avait pas été allumé ailleurs.
+function isAutomodActive(settings) {
+    const automod = settings?.automod;
+    if (!automod) return false;
+    if (automod.enabled) return true;
+    return Object.values(automod).some(module => module && typeof module === 'object' && module.enabled === true)
+        || (Array.isArray(automod.selfieChannels) && automod.selfieChannels.length > 0);
+}
 
 const REASON_TO_MODULE = {
     spam: 'antispam',
     flood: 'antiflood',
     link: 'antilink',
     invite: 'antiinvite',
+    gift: 'antilink',
     mention: 'antimassmention',
     ghostping: 'antighostping',
     everyone: 'antieveryone',
@@ -40,11 +117,6 @@ const REASON_TO_MODULE = {
 
 function isChannelIgnored(channelId, ...lists) {
     return lists.some(list => Array.isArray(list) && list.includes(channelId));
-}
-
-function isWhitelistedContent(content, whitelist = []) {
-    const lowerContent = String(content || '').toLowerCase();
-    return whitelist.some(entry => entry && lowerContent.includes(String(entry).toLowerCase()));
 }
 
 function normalizeContent(content) {
@@ -117,6 +189,26 @@ async function isTrustedMember(client, message, settings) {
     return isWhitelisted(member, message.author.id, wl);
 }
 
+function recordLinkBurst(message) {
+    const key = `${message.guild.id}:${message.author.id}`;
+    const now = Date.now();
+    const recent = (linkBursts.get(key) || []).filter(t => now - t < LINK_BURST.window);
+    recent.push(now);
+    linkBursts.set(key, recent);
+    if (linkBursts.size > 5000) for (const [k, list] of linkBursts) if (!list.some(t => now - t < LINK_BURST.window)) linkBursts.delete(k);
+    return recent.length;
+}
+
+// Un avertissement par membre toutes les 8 s au plus : pas de pluie de messages pendant un spam.
+function canWarn(message) {
+    const key = `${message.guild.id}:${message.author.id}`;
+    const now = Date.now();
+    if ((warnCooldowns.get(key) || 0) > now) return false;
+    warnCooldowns.set(key, now + WARN_COOLDOWN);
+    if (warnCooldowns.size > 5000) for (const [k, until] of warnCooldowns) if (until <= now) warnCooldowns.delete(k);
+    return true;
+}
+
 async function sendTemporaryWarning(message, content) {
     await message.channel.send(content)
         .then(sentMessage => setTimeout(() => sentMessage.delete().catch(() => {}), 5000))
@@ -124,25 +216,63 @@ async function sendTemporaryWarning(message, content) {
 }
 
 const AutomodService = {
+    isActive: isAutomodActive,
+
     async check(client, message, settings) {
-        if (!settings?.automod?.enabled) return false;
+        if (!isAutomodActive(settings)) return false;
         const automod = settings.automod;
 
         if (!message.guild || message.author?.bot || !message.member) return false;
         if (automod.ignoredRoles?.some(roleId => message.member.roles.cache.has(roleId))) return false;
         if (automod.ignoredChannels?.includes(message.channelId)) return false;
-        if (await isTrustedMember(client, message, settings)) return false;
 
+        // Détection d'abord (que du calcul) : la vérification de confiance peut demander
+        // un appel Discord, elle n'est faite que si quelque chose a été trouvé.
         const violation = await this.detectViolation(client, message, settings);
         if (!violation) return false;
+        if (await isTrustedMember(client, message, settings)) return false;
 
         await this.handleViolation(client, message, settings, violation);
         return true;
     },
 
+    /**
+     * Message envoyé par une appli au nom d'un membre (appli installée sur son compte) :
+     * souvent une invitation avec un bouton « Rejoindre ». Seul l'antilink s'applique,
+     * et la sanction vise le membre qui a lancé l'appli.
+     */
+    async checkAppMessage(client, message, settings) {
+        const userId = message.interactionMetadata?.user?.id;
+        if (!userId || message.author?.id === client.user?.id || !isAutomodActive(settings)) return false;
+        const member = await message.guild.members.fetch(userId).catch(() => null);
+        if (!member) return false;
+        const asMember = Object.create(message, { member: { value: member }, author: { value: member.user } });
+        const violation = this.detectLinks(asMember, settings.automod);
+        if (!violation) return false;
+        if (await isTrustedMember(client, asMember, settings)) return false;
+        await this.handleViolation(client, asMember, settings, violation);
+        return true;
+    },
+
+    detectLinks(message, automod) {
+        if (automod.antiinvite?.enabled && !isChannelIgnored(message.channelId, automod.antiinvite.ignoredChannels)) {
+            const found = findLinkViolation(message, automod.antiinvite.whitelist, 'invite');
+            if (found) return { reason: found, moduleKey: 'antiinvite', count: 1 };
+        }
+        if (automod.antilink?.enabled && !isChannelIgnored(message.channelId, automod.antilink.ignoredChannels)) {
+            const found = findLinkViolation(message, automod.antilink.whitelist, automod.antilink.mode || 'all');
+            if (found) return { reason: found, moduleKey: 'antilink', count: 1 };
+        }
+        return null;
+    },
+
     async detectViolation(client, message, settings) {
         const automod = settings.automod;
         const content = message.content || '';
+
+        // Liens d'abord : c'est la menace la plus urgente (arnaques, pub).
+        const linkViolation = this.detectLinks(message, automod);
+        if (linkViolation) return linkViolation;
 
         if (automod.antispam?.enabled && !isChannelIgnored(message.channelId, automod.antispam.ignoredChannels)) {
             const duration = automod.antispam.duration || 5000;
@@ -161,20 +291,6 @@ const AutomodService = {
             if (similarCount >= threshold) {
                 clearFloodHistory(message);
                 return { reason: 'flood', moduleKey: 'antiflood', count: similarCount };
-            }
-        }
-
-        if (automod.antiinvite?.enabled && !isChannelIgnored(message.channelId, automod.antiinvite.ignoredChannels)) {
-            if (INVITE_REGEX.test(content) && !isWhitelistedContent(content, automod.antiinvite.whitelist)) {
-                return { reason: 'invite', moduleKey: 'antiinvite', count: 1 };
-            }
-        }
-
-        if (automod.antilink?.enabled && !isChannelIgnored(message.channelId, automod.antilink.ignoredChannels)) {
-            const mode = automod.antilink.mode || 'all';
-            const hasLink = mode === 'invite' ? INVITE_REGEX.test(content) : LINK_REGEX.test(content);
-            if (hasLink && !isWhitelistedContent(content, automod.antilink.whitelist)) {
-                return { reason: mode === 'invite' ? 'invite' : 'link', moduleKey: 'antilink', count: 1 };
             }
         }
 
@@ -230,7 +346,7 @@ const AutomodService = {
     },
 
     async handleGhostPing(client, message, settings) {
-        if (!settings?.automod?.enabled || !settings.automod?.antighostping?.enabled) return false;
+        if (!settings?.automod?.antighostping?.enabled) return false;
         if (!message.guild || message.author?.bot || !message.member) return false;
         // Ne pas pénaliser deux fois un message déjà supprimé par l'automod lui-même.
         if (message?.id && autoDeletedMessages.has(message.id)) {
@@ -284,7 +400,10 @@ const AutomodService = {
                     const newCount = userStrikes + 1;
                     await this.setStrikes(message.author.id, message.guild.id, newCount);
 
-                    const punishment = this.resolvePunishment(automod, newCount, extra.moduleKey || REASON_TO_MODULE[reason]);
+                    let punishment = this.resolvePunishment(automod, newCount, extra.moduleKey || REASON_TO_MODULE[reason]);
+                    // Spam de liens (3 en 30 s) : TO direct, quelle que soit la sanction prévue.
+                    if (LINK_REASONS.has(reason) && recordLinkBurst(message) >= LINK_BURST.count
+                        && (!punishment || punishment === 'warn')) punishment = 'timeout';
                     const maxStrikes = automod.strikes?.ban || 10;
 
                     await this.logAutomod(client, message, settings, {
@@ -301,9 +420,11 @@ const AutomodService = {
                         return;
                     }
 
+                    if (!canWarn(message)) return;
+                    const what = LINK_WARNINGS[reason] || `violation détectée (${reason})`;
                     await sendTemporaryWarning(
                         message,
-                        `🚫 ${message.author}, violation détectée (${reason}). Strike ${newCount}/${maxStrikes}.`
+                        `🚫 ${message.author}, ${what}. Avertissement ${newCount}/${maxStrikes}.`
                     );
                 } finally {
                     release();

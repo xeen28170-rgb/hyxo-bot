@@ -18,13 +18,14 @@ module.exports = {
     async isBlocked(userId) {
         return Boolean(await Blacklist.findOne({ userId }));
     },
-    async enforceGuild(guild, entry) {
+    // tag : « Blacklist » ou « Wet » (même bannissement, liste différente).
+    async enforceGuild(guild, entry, tag = 'Blacklist') {
         try {
             const ban = await guild.bans.fetch(entry.userId).catch(error => {
                 if (error.code === 10026) return null;
                 throw error;
             });
-            if (!ban) await guild.members.ban(entry.userId, { reason: `[Blacklist] ${entry.reason || 'Blacklist globale'}`.slice(0, 512) });
+            if (!ban) await guild.members.ban(entry.userId, { reason: `[${tag}] ${entry.reason || (tag === 'Wet' ? 'Wet' : 'Blacklist globale')}`.slice(0, 512) });
             return true;
         } catch (error) {
             if (error.code === 50013) {

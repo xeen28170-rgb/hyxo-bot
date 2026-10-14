@@ -6,6 +6,7 @@ const { scheduleStatsUpdate } = require('../../commands/logs/statschannels');
 const Leash = require('../../models/Leash');
 const PrisonService = require('../../services/prisonService');
 const Logger = require('../../utils/logger');
+const BoostMessages = require('../../services/boostMessageService');
 
 async function handleLeashNick(client, oldMember, newMember) {
     try {
@@ -37,6 +38,9 @@ module.exports = {
         await Promise.all([
             handleLeashNick(client, oldMember, newMember),
             handlePrisonRoleGuard(client, oldMember, newMember),
+            BoostMessages.onMemberUpdate(client, oldMember, newMember).catch(error => {
+                Logger.error('[Boost] Message de boost:', error.message);
+            }),
         ]);
 
         if (oldMember.roles.cache.size !== newMember.roles.cache.size) {
