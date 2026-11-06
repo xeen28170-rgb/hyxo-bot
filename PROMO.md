@@ -1,6 +1,6 @@
 # 📣 Kit de promotion Hyxo
 
-Textes prêts à copier-coller. Remplace `1538271225640652810` et `LIEN_SUPPORT_ICI` partout.
+Textes prêts à copier-coller. Remplace `1538271225640652810` partout.
 
 - **Lien d'invitation :** `https://discord.com/oauth2/authorize?client_id=1538271225640652810&scope=bot+applications.commands&permissions=8`
 - **Tags :** Moderation, Security, Anti-Raid, Tickets, Utility, Giveaway, French
@@ -43,7 +43,6 @@ Ban, tempban, kick, mute, timeout, warns, prison, lock/hide, historique des sanc
 2. Tape `-help`
 3. Configure la sécurité avec `-secur`
 
-💬 Support : https://discord.gg/LIEN_SUPPORT_ICI
 ```
 
 ---
@@ -61,7 +60,6 @@ Ban, tempban, kick, mute, timeout, warns, prison, lock/hide, historique des sanc
 ✅ +140 commandes, 100 % gratuit
 
 ➕ Inviter : https://discord.com/oauth2/authorize?client_id=1538271225640652810&scope=bot+applications.commands&permissions=8
-💬 Support : https://discord.gg/LIEN_SUPPORT_ICI
 ```
 
 > Poste uniquement dans les salons prévus pour la pub, en respectant les règles de chaque serveur. Pas de MP non sollicités : c'est interdit par Discord et ça peut faire bannir le bot.

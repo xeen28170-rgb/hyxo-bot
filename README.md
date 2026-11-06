@@ -6,7 +6,6 @@
 Modération · Antiraid · Tickets · Backups · Giveaways · Vocaux temporaires
 
 [![Inviter Hyxo](https://img.shields.io/badge/➕_Inviter_Hyxo-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.com/oauth2/authorize?client_id=1538271225640652810&scope=bot+applications.commands&permissions=8)
-[![Serveur support](https://img.shields.io/badge/💬_Support-2B2D31?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/LIEN_SUPPORT_ICI)
 
 [![discord.js](https://img.shields.io/badge/discord.js-v14-5865F2)](https://discord.js.org)
 [![Node.js](https://img.shields.io/badge/node.js-%3E%3D18-339933)](https://nodejs.org)
@@ -42,7 +41,7 @@ Modération · Antiraid · Tickets · Backups · Giveaways · Vocaux temporaires
 2. Tapez `-help` pour afficher le menu des commandes.
 3. Configurez la sécurité avec `-secur`.
 
-Besoin d'aide ? Tapez `-support` ou rejoignez le [serveur support](https://discord.gg/LIEN_SUPPORT_ICI).
+Besoin d'aide ? Ouvrez une [issue sur GitHub](https://github.com/xeen28170-rgb/hyxo-bot/issues).
 
 ---
 
